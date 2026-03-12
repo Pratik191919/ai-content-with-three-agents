@@ -39,8 +39,9 @@ async function generateFeaturedImage(title) {
 }
 
 async function publishToCMS(postData, briefId) {
-    console.log(`Agent 02: Publishing '${postData.title}' to local preview...`);
-    return `http://localhost:5173/preview/${briefId}`;
+    console.log(`Agent 02: Publishing '${postData.title}' to preview...`);
+    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
+    return `${frontendUrl}/preview/${briefId}`;
 }
 
 async function processBrief(briefId) {

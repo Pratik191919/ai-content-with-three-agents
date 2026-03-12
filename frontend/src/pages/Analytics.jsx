@@ -43,7 +43,7 @@ const Analytics = () => {
                                     <span className={`badge ${p.status.toLowerCase()}`}>{p.status}</span>
                                 </td>
                                 <td style={{ color: 'var(--text-secondary)' }}>
-                                    <a href={p.live_url} target="_blank" rel="noreferrer" style={{ color: 'var(--accent-purple)' }}>{p.live_url}</a>
+                                    <a href={p.live_url.replace('http://localhost:5173', window.location.origin)} target="_blank" rel="noreferrer" style={{ color: 'var(--accent-purple)' }}>{p.live_url.replace('http://localhost:5173', window.location.origin)}</a>
                                 </td>
                                 <td style={{ color: 'var(--text-secondary)' }}>{new Date(p.created_at).toLocaleString()}</td>
                             </tr>
