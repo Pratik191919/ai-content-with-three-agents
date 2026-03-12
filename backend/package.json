@@ -4,7 +4,7 @@
     "description": "Node.js Rewrite of Content Agents",
     "main": "api.js",
     "scripts": {
-        "start": "concurrently \"node api.js\" \"node agent_01_content_strategist.js\" \"node agent_02_blog_writer.js\" \"node agent_03_content_auditor.js\"",
+        "start": "node start.js",
         "start:api": "node api.js",
         "start:agent1": "node agent_01_content_strategist.js",
         "start:agent2": "node agent_02_blog_writer.js",
