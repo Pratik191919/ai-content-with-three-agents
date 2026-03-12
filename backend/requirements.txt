@@ -1,0 +1,8 @@
+supabase
+redis
+qdrant-client
+google-generativeai
+fastapi
+uvicorn
+requests
+python-dotenv
