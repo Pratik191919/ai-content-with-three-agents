@@ -27,9 +27,7 @@ def scan_trends():
     """
     print("Agent 01: Scanning trends...")
     return [
-        {"topic": "AI tools for marketing", "trend_score": 85},
-        {"topic": "Next.js 15 features", "trend_score": 70},
-        {"topic": "Open source LLMs 2026", "trend_score": 90}
+        {"topic": "AI tools for marketing", "trend_score": 85}
     ]
 
 def deduplicate_trends(trends):

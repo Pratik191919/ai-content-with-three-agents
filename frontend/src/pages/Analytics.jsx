@@ -7,7 +7,7 @@ const Analytics = () => {
     useEffect(() => {
         const fetchData = async () => {
             try {
-                const res = await axios.get('http://localhost:8000/api/content/posts');
+                const res = await axios.get(`${import.meta.env.VITE_API_URL || 'http://localhost:8000'}/api/content/posts`);
                 setPosts(res.data);
             } catch (err) {
                 console.error('Failed to fetch posts for analytics', err);

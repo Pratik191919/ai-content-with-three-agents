@@ -11,7 +11,7 @@ const PostPreview = () => {
     useEffect(() => {
         const fetchPost = async () => {
             try {
-                const res = await axios.get(`http://localhost:8000/api/content/posts/${briefId}`);
+                const res = await axios.get(`${import.meta.env.VITE_API_URL || 'http://localhost:8000'}/api/content/posts/${briefId}`);
                 setPost(res.data);
             } catch (err) {
                 console.error(err);

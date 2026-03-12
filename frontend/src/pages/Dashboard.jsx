@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Target, CheckCircle, TrendingUp, AlertCircle } from 'lucide-react';
 import axios from 'axios';
 
-const API_BASE = 'http://localhost:8000/api/content';
+const API_BASE = (import.meta.env.VITE_API_URL || 'http://localhost:8000') + '/api/content';
 
 const Dashboard = () => {
     const [stats, setStats] = useState([

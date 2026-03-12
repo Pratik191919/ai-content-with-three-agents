@@ -4,6 +4,8 @@ from supabase import create_client, Client
 import redis
 import json
 import os
+from agent_01_content_strategist import run_agent_01
+from agent_02_blog_writer import process_brief
 
 app = FastAPI()
 
@@ -41,9 +43,14 @@ def get_performance():
     response = supabase.table("post_performance").select("*").order('created_at', desc=True).limit(50).execute()
     return response.data
     
-# Advanced endpoint for triggering agent 01
-@app.post("/api/content/scan-trends")
-def trigger_agent_01():
-    # Publish an event to tell Agent 01 to scan trends right now
-    # Since agent 01 runs on cron, we can also add an immediate trigger
-    pass
+@app.post("/run-agents")
+async def run_agents():
+    # Run Agent 1 synchronously
+    run_agent_01()
+    
+    # Normally, run_agent_01 publishes a Redis event that agent_02 listens to.
+    # If agent_02 is running in a worker dyno on Render, it will auto-catch it! 
+    # But if you want a complete sequential web request without a background worker listener, 
+    # we would need to capture the returned brief_id and pass it to process_brief(brief_id).
+    
+    return {"message": "agents executed"}

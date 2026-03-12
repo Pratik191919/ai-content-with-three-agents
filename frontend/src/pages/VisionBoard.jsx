@@ -7,7 +7,7 @@ const VisionBoard = () => {
 
     useEffect(() => {
         // Connect to WebSocket Server
-        const socket = io('http://localhost:8000');
+        const socket = io(import.meta.env.VITE_API_URL || 'http://localhost:8000');
 
         socket.on('connect', () => {
             console.log('Connected to Agent Vision Board Stream');

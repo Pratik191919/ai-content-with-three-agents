@@ -7,7 +7,7 @@ const ContentCalendar = () => {
     useEffect(() => {
         const fetchData = async () => {
             try {
-                const res = await axios.get('http://localhost:8000/api/content/briefs');
+                const res = await axios.get(`${import.meta.env.VITE_API_URL || 'http://localhost:8000'}/api/content/briefs`);
                 setBriefs(res.data);
             } catch (err) { }
         };
