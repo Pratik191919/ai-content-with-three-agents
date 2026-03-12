@@ -51,10 +51,12 @@ app.get('/api/content/posts/:briefId', async (req, res) => {
         .from('content')
         .select('*')
         .eq('brief_id', req.params.briefId)
-        .single();
+        .limit(1);
 
     if (error) return res.status(500).json({ error: error.message });
-    res.json(data);
+    if (!data || data.length === 0) return res.status(404).json({ error: 'Post not found' });
+    
+    res.json(data[0]);
 });
 
 app.get('/api/content/performance', async (req, res) => {
