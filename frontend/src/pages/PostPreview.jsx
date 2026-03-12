@@ -29,7 +29,7 @@ const PostPreview = () => {
             <Link to="/analytics" style={{ display: 'inline-flex', alignItems: 'center', gap: '0.5rem', color: 'var(--text-secondary)', marginBottom: '2rem', textDecoration: 'none' }}>
                 <ArrowLeft size={16} /> Back to Analytics
             </Link>
-            {post.featured_image_url && <img src={post.featured_image_url} alt="Featured" style={{ width: '100%', height: '300px', objectFit: 'cover', borderRadius: '12px', marginBottom: '2rem' }} />}
+            {post.featured_image_url && <img src={post.featured_image_url} alt="Featured" onError={(e) => e.target.style.display = 'none'} style={{ width: '100%', height: '300px', objectFit: 'cover', borderRadius: '12px', marginBottom: '2rem' }} />}
             <span className="badge published" style={{ marginBottom: '1rem', display: 'inline-block' }}>SEO Rank: {post.seo_score}%</span>
             <h1 style={{ marginBottom: '1.5rem', fontSize: '2rem', lineHeight: '1.2' }}>{post.title}</h1>
             <div dangerouslySetInnerHTML={{ __html: (post.html_content || '').replace(/<h1[^>]*>.*?<\/h1>/i, '') }} style={{ lineHeight: '1.8', fontSize: '1.1rem' }} />
