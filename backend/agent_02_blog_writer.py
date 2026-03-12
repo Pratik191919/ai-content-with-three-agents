@@ -53,6 +53,10 @@ def process_brief(brief_id):
         
     brief = response.data[0]
     
+    if brief['status'] != 'PENDING':
+        print(f"Agent 02: Brief {brief_id} is already processing or published. Skipping...")
+        return
+    
     # Update status
     supabase.table("content_briefs").update({"status": "IN_PROGRESS"}).eq("id", brief_id).execute()
     

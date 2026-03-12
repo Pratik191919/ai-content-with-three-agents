@@ -58,6 +58,12 @@ async function processBrief(briefId) {
 
         const brief = briefData[0];
 
+        // ADDED SAFETY CHECK: Prevent multiple agents from writing the same blog post
+        if (brief.status !== 'PENDING') {
+            console.log(`Agent 02: Brief ${briefId} is already processing or published by another worker. Skipping...`);
+            return;
+        }
+
         await supabase.from('content_briefs').update({ status: 'IN_PROGRESS' }).eq('id', briefId);
 
         const { htmlContent, seoScore } = await generateBlogPost(brief);
