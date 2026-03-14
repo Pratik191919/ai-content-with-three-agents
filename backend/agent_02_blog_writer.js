@@ -25,7 +25,14 @@ async function generateBlogPost(brief) {
     let attempts = 0;
     while (attempts < 5) {
         try {
-            const prompt = `Write a totally unique, highly dynamic 500-800 word HTML blog post for the topic: "${brief.title}". Include: a unique catchy introduction, unique H2 and H3 tags specific to this topic, detailed uniquely written paragraphs with original thoughts. Output ONLY raw HTML. Do not wrap it in markdown block tags like \`\`\`html.`;
+            const prompt = `Write a totally unique, highly dynamic 500-800 word blog post for the topic: "${brief.title}".
+
+Rules:
+- Output ONLY article body HTML using these tags: <h2>, <h3>, <p>, <ul>, <li>, <strong>, <em>
+- Do NOT include: <style>, <script>, <head>, <html>, <body>, <!DOCTYPE>, or any CSS
+- Do NOT wrap output in markdown code blocks
+- Start directly with content (e.g. <p> or <h2>)
+- Write original, insightful paragraphs with unique H2 and H3 headings for this specific topic`;
 
             const completion = await groq.chat.completions.create({
                 model: 'llama-3.3-70b-versatile',
@@ -34,7 +41,14 @@ async function generateBlogPost(brief) {
             });
 
             htmlContent = completion.choices[0].message.content
-                .replace(/```html/gi, '').replace(/```/gi, '').trim();
+                .replace(/```html/gi, '').replace(/```/gi, '') // strip markdown fences
+                .replace(/<style[\s\S]*?<\/style>/gi, '')       // strip <style> blocks
+                .replace(/<script[\s\S]*?<\/script>/gi, '')     // strip <script> blocks
+                .replace(/<!DOCTYPE[^>]*>/gi, '')               // strip DOCTYPE
+                .replace(/<\/?html[^>]*>/gi, '')                // strip <html> tags
+                .replace(/<\/?head[^>]*>/gi, '')                // strip <head> tags
+                .replace(/<\/?body[^>]*>/gi, '')                // strip <body> tags
+                .trim();
             break;
         } catch (err) {
             attempts++;
