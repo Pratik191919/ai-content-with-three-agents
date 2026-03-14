@@ -31,7 +31,18 @@ if (!SUPABASE_URL || !SUPABASE_KEY) {
     console.log('Current SUPABASE_URL:', SUPABASE_URL ? 'PRESENT' : 'MISSING');
 }
 
-const supabase = createClient(SUPABASE_URL || 'http://placeholder', SUPABASE_KEY || 'placeholder');
+let supabase;
+if (SUPABASE_URL && SUPABASE_URL.startsWith('http')) {
+    supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
+} else {
+    console.error('ERROR: Supabase Client could not be initialized due to invalid URL.');
+    // Create a mock object to prevent crashes on route calls if the user hasn't set the vars yet
+    supabase = { 
+        from: () => ({ 
+            select: () => ({ order: () => ({ eq: () => ({ limit: () => ({}) }) }) }) 
+        }) 
+    };
+}
 const redisClient = redis.createClient({ url: REDIS_URL });
 
 app.get('/', (req, res) => {
