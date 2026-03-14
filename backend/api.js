@@ -15,11 +15,16 @@ const io = new Server(server, {
     cors: { origin: '*' }
 });
 
-const SUPABASE_URL = process.env.SUPABASE_URL || 'http://localhost:8000';
-const SUPABASE_KEY = process.env.SUPABASE_KEY || 'dummy_key';
+const SUPABASE_URL = process.env.SUPABASE_URL;
+const SUPABASE_KEY = process.env.SUPABASE_KEY;
 const REDIS_URL = process.env.REDIS_URL || 'redis://127.0.0.1:6379';
 
-const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
+if (!SUPABASE_URL || !SUPABASE_KEY) {
+    console.error('FATAL ERROR: SUPABASE_URL or SUPABASE_KEY is missing!');
+    console.log('Current SUPABASE_URL:', SUPABASE_URL ? 'PRESENT' : 'MISSING');
+}
+
+const supabase = createClient(SUPABASE_URL || 'http://placeholder', SUPABASE_KEY || 'placeholder');
 const redisClient = redis.createClient({ url: REDIS_URL });
 
 app.get('/', (req, res) => {
