@@ -1,12 +1,15 @@
 require('dotenv').config({ path: '../frontend/.env' });
-const { GoogleGenerativeAI } = require('@google/generative-ai');
+const Groq = require('groq-sdk');
 
-const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
-console.log('API Key:', GEMINI_API_KEY ? GEMINI_API_KEY.substring(0, 10) + '...' : 'MISSING');
+const GROQ_API_KEY = process.env.GROQ_API_KEY;
+console.log('Groq API Key:', GROQ_API_KEY ? GROQ_API_KEY.substring(0, 10) + '...' : '❌ MISSING — Add GROQ_API_KEY to .env');
 
-const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
-const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' });
+if (!GROQ_API_KEY) process.exit(1);
 
-model.generateContent('Say "API is working!" in exactly 5 words.')
-    .then(r => console.log('✅ Gemini Response:', r.response.text()))
-    .catch(e => console.error('❌ Error:', e.message));
+const groq = new Groq({ apiKey: GROQ_API_KEY });
+
+groq.chat.completions.create({
+    model: 'llama-3.3-70b-versatile',
+    messages: [{ role: 'user', content: 'Say "Groq AI is working perfectly!" in exactly 5 words.' }]
+}).then(r => console.log('✅ Groq Response:', r.choices[0].message.content))
+  .catch(e => console.error('❌ Error:', e.message));

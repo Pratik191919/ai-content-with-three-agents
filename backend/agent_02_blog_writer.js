@@ -1,59 +1,49 @@
 const { createClient } = require('@supabase/supabase-js');
 const redis = require('redis');
-const { GoogleGenerativeAI } = require('@google/generative-ai');
+const Groq = require('groq-sdk');
 require('dotenv').config({ path: '../frontend/.env' });
 
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_KEY = process.env.SUPABASE_KEY;
 const REDIS_URL = process.env.REDIS_URL || 'redis://127.0.0.1:6379';
-const GEMINI_API_KEY = process.env.GEMINI_API_KEY || '';
+const GROQ_API_KEY = process.env.GROQ_API_KEY;
 const WP_COM_SITE = process.env.WP_COM_SITE || 'myaiagentblog09.wordpress.com';
 const WP_COM_TOKEN = process.env.WP_COM_TOKEN ? decodeURIComponent(process.env.WP_COM_TOKEN) : null;
 
-const supabase = (SUPABASE_URL && SUPABASE_KEY && SUPABASE_URL.startsWith('http')) 
-    ? createClient(SUPABASE_URL, SUPABASE_KEY) 
+const supabase = (SUPABASE_URL && SUPABASE_KEY && SUPABASE_URL.startsWith('http'))
+    ? createClient(SUPABASE_URL, SUPABASE_KEY)
     : { from: () => ({ select: () => ({ eq: () => ({ eq: () => ({}) }), order: () => ({}) }), insert: () => ({ select: () => ({}) }), update: () => ({ eq: () => ({}) }) }) };
 let redisClient;
 
-let genAI;
-let model;
-if (GEMINI_API_KEY) {
-    genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
-    model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' });
-}
+const groq = GROQ_API_KEY ? new Groq({ apiKey: GROQ_API_KEY }) : null;
 
 async function generateBlogPost(brief) {
-    console.log(`Agent 02: Initiating AI content generation for: ${brief.title}...`);
+    console.log(`Agent 02: Generating blog post with Groq AI (Llama 3.3) for: ${brief.title}...`);
+    if (!groq) throw new Error('GROQ_API_KEY is missing.');
+
     let htmlContent;
-    try {
-        if (!model) throw new Error("Gemini API key is missing or model not initialized.");
-        const prompt = `Write a totally unique, highly dynamic 500-800 word HTML blog post for the topic: "${brief.title}". 
-        Include:
-        - A unique, catchy introduction paragraph.
-        - Unique H2 and H3 tags specific to this exact topic.
-        - Detailed, uniquely written paragraphs filled with original thoughts.
-        Output ONLY raw HTML. Do not wrap it in markdown block tags like \`\`\`html.`;
-        
-        let result;
-        let attempts = 0;
-        // Automatic Retry Logic to prevent API timeouts!
-        while (attempts < 5) {
-            try {
-                result = await model.generateContent(prompt);
-                break; // If successful, exit the retry loop
-            } catch (err) {
-                attempts++;
-                console.warn(`Agent 02: Gemini API busy/rate-limited. Waiting 5 seconds before retry ${attempts}/5...`);
-                await new Promise(res => setTimeout(res, 5000));
-                if (attempts >= 5) throw err; // If all 5 retries fail, throw to the final catch
-            }
+    let attempts = 0;
+    while (attempts < 5) {
+        try {
+            const prompt = `Write a totally unique, highly dynamic 500-800 word HTML blog post for the topic: "${brief.title}". Include: a unique catchy introduction, unique H2 and H3 tags specific to this topic, detailed uniquely written paragraphs with original thoughts. Output ONLY raw HTML. Do not wrap it in markdown block tags like \`\`\`html.`;
+
+            const completion = await groq.chat.completions.create({
+                model: 'llama-3.3-70b-versatile',
+                messages: [{ role: 'user', content: prompt }],
+                temperature: 0.9
+            });
+
+            htmlContent = completion.choices[0].message.content
+                .replace(/```html/gi, '').replace(/```/gi, '').trim();
+            break;
+        } catch (err) {
+            attempts++;
+            console.warn(`Agent 02: Groq API busy. Retry ${attempts}/5...`);
+            await new Promise(res => setTimeout(res, 5000));
+            if (attempts >= 5) throw new Error('Groq AI failed to generate content after 5 retries.');
         }
-        
-        htmlContent = result.response.text().replace(/```html/gi, '').replace(/```/gi, '').trim();
-    } catch (e) {
-        console.error("Gemini AI completely failed to generate content:", e.message);
-        throw new Error("Generative AI was unable to generate content. Please check API Limits or model availability.");
     }
+
     const seoScore = Math.floor(Math.random() * (100 - 75 + 1) + 75);
     return { htmlContent, seoScore };
 }

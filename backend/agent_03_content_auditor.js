@@ -1,24 +1,19 @@
 const { createClient } = require('@supabase/supabase-js');
 const redis = require('redis');
-const { GoogleGenerativeAI } = require('@google/generative-ai');
+const Groq = require('groq-sdk');
 require('dotenv').config({ path: '../frontend/.env' });
 
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_KEY = process.env.SUPABASE_KEY;
 const REDIS_URL = process.env.REDIS_URL || 'redis://127.0.0.1:6379';
-const GEMINI_API_KEY = process.env.GEMINI_API_KEY || '';
+const GROQ_API_KEY = process.env.GROQ_API_KEY;
 
-const supabase = (SUPABASE_URL && SUPABASE_KEY && SUPABASE_URL.startsWith('http')) 
-    ? createClient(SUPABASE_URL, SUPABASE_KEY) 
+const supabase = (SUPABASE_URL && SUPABASE_KEY && SUPABASE_URL.startsWith('http'))
+    ? createClient(SUPABASE_URL, SUPABASE_KEY)
     : { from: () => ({ select: () => ({ eq: () => ({}) }), insert: () => ({ select: () => ({}) }), update: () => ({ eq: () => ({}) }) }) };
 let redisClient;
 
-let genAI;
-let model;
-if (GEMINI_API_KEY) {
-    genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
-    model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' });
-}
+const groq = GROQ_API_KEY ? new Groq({ apiKey: GROQ_API_KEY }) : null;
 
 async function fetchGSCData(url) {
     console.log(`Agent 03: Simulating dynamic GSC data for ${url}...`);

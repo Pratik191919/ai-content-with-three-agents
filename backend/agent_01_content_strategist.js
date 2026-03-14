@@ -1,48 +1,47 @@
 const { createClient } = require('@supabase/supabase-js');
 const redis = require('redis');
-const { GoogleGenerativeAI } = require('@google/generative-ai');
+const Groq = require('groq-sdk');
 require('dotenv').config({ path: '../frontend/.env' });
 
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_KEY = process.env.SUPABASE_KEY;
 const REDIS_URL = process.env.REDIS_URL || 'redis://127.0.0.1:6379';
-const GEMINI_API_KEY = process.env.GEMINI_API_KEY || '';
+const GROQ_API_KEY = process.env.GROQ_API_KEY;
 
-const supabase = (SUPABASE_URL && SUPABASE_KEY && SUPABASE_URL.startsWith('http')) 
-    ? createClient(SUPABASE_URL, SUPABASE_KEY) 
+const supabase = (SUPABASE_URL && SUPABASE_KEY && SUPABASE_URL.startsWith('http'))
+    ? createClient(SUPABASE_URL, SUPABASE_KEY)
     : { from: () => ({ select: () => ({ eq: () => ({}) }), insert: () => ({ select: () => ({}) }), update: () => ({ eq: () => ({}) }) }) };
 const redisClient = redis.createClient({ url: REDIS_URL });
 
-let genAI;
-let model;
-if (GEMINI_API_KEY) {
-    genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
-    model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' });
-}
+const groq = GROQ_API_KEY ? new Groq({ apiKey: GROQ_API_KEY }) : null;
 
 async function scanTrends() {
-    console.log('Agent 01: Requesting dynamic trends from Gemini AI...');
+    console.log('Agent 01: Requesting dynamic trends from Groq AI (Llama 3.3)...');
+    if (!groq) throw new Error('GROQ_API_KEY is missing. Add it to your .env file.');
+
     let attempts = 0;
     while (attempts < 5) {
         try {
-            if (!model) throw new Error("Gemini model not initialized.");
-            const prompt = "Generate 1 random hot trending topic in technology or marketing for 2026. Only return a valid JSON array of objects containing exactly 1 object. Each object must have a 'topic' (string) and a 'trend_score' (number between 50 and 100). Do not use markdown blocks, just raw JSON.";
-            
-            // Force pure JSON from the model if supported, otherwise just rely on prompt instructions
-            const result = await model.generateContent(prompt);
-            const text = result.response.text();
-            
+            const prompt = "Generate 1 random hot trending topic in technology or marketing for 2026. Only return a valid JSON array containing exactly 1 object. Each object must have a 'topic' (string) and a 'trend_score' (number between 50 and 100). Do not use markdown blocks, just raw JSON.";
+
+            const completion = await groq.chat.completions.create({
+                model: 'llama-3.3-70b-versatile',
+                messages: [{ role: 'user', content: prompt }],
+                temperature: 0.8
+            });
+
+            const text = completion.choices[0].message.content;
             const cleaned = text.replace(/```json/gi, '').replace(/```/gi, '').trim();
             const parsed = JSON.parse(cleaned);
             return Array.isArray(parsed) ? parsed : [parsed];
-            
+
         } catch (e) {
             attempts++;
-            console.error(`Agent 01: Gemini API failed (Attempt ${attempts}/5). Retrying in 5 seconds... Error:`, e.message);
+            console.error(`Agent 01: Groq API failed (Attempt ${attempts}/5). Retrying in 5 seconds... Error:`, e.message);
             await new Promise(res => setTimeout(res, 5000));
             if (attempts >= 5) {
-                console.error("Agent 01: All retries failed. Giving up for this cycle.");
-                throw new Error("Failed to scan trends. Free API exhausted.");
+                console.error('Agent 01: All retries failed. Giving up for this cycle.');
+                throw new Error('Failed to scan trends after 5 attempts.');
             }
         }
     }
