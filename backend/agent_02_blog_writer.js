@@ -3,12 +3,14 @@ const redis = require('redis');
 const { GoogleGenerativeAI } = require('@google/generative-ai');
 require('dotenv').config({ path: '../frontend/.env' });
 
-const SUPABASE_URL = process.env.SUPABASE_URL || 'http://localhost:8000';
-const SUPABASE_KEY = process.env.SUPABASE_KEY || 'dummy_key';
+const SUPABASE_URL = process.env.SUPABASE_URL;
+const SUPABASE_KEY = process.env.SUPABASE_KEY;
 const REDIS_URL = process.env.REDIS_URL || 'redis://127.0.0.1:6379';
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY || '';
 
-const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
+const supabase = (SUPABASE_URL && SUPABASE_KEY && SUPABASE_URL.startsWith('http')) 
+    ? createClient(SUPABASE_URL, SUPABASE_KEY) 
+    : { from: () => ({ select: () => ({ eq: () => ({ eq: () => ({}) }), order: () => ({}) }), insert: () => ({ select: () => ({}) }), update: () => ({ eq: () => ({}) }) }) };
 let redisClient;
 
 let genAI;
