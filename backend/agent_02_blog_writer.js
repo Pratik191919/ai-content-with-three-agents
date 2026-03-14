@@ -7,9 +7,8 @@ const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_KEY = process.env.SUPABASE_KEY;
 const REDIS_URL = process.env.REDIS_URL || 'redis://127.0.0.1:6379';
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY || '';
-const WP_URL = process.env.WP_URL || 'https://ai-content.lovestoblog.com';
-const WP_USERNAME = process.env.WP_USERNAME;
-const WP_APP_PASSWORD = process.env.WP_APP_PASSWORD;
+const WP_COM_SITE = process.env.WP_COM_SITE || 'myaiagentblog09.wordpress.com';
+const WP_COM_TOKEN = process.env.WP_COM_TOKEN ? decodeURIComponent(process.env.WP_COM_TOKEN) : null;
 
 const supabase = (SUPABASE_URL && SUPABASE_KEY && SUPABASE_URL.startsWith('http')) 
     ? createClient(SUPABASE_URL, SUPABASE_KEY) 
@@ -65,21 +64,20 @@ async function generateFeaturedImage(title) {
 }
 
 async function publishToCMS(postData, briefId) {
-    if (!WP_USERNAME || !WP_APP_PASSWORD) {
-        console.warn('Agent 02: WordPress credentials missing (WP_USERNAME/WP_APP_PASSWORD). Skipping WP publish.');
+    if (!WP_COM_TOKEN) {
+        console.warn('Agent 02: WP_COM_TOKEN missing. Skipping WordPress.com publish.');
         const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
         return `${frontendUrl}/preview/${briefId}`;
     }
 
-    console.log(`Agent 02: Publishing '${postData.title}' to WordPress at ${WP_URL}...`);
+    console.log(`Agent 02: Publishing '${postData.title}' to WordPress.com (${WP_COM_SITE})...`);
     try {
-        const endpoint = `${WP_URL.replace(/\/$/, '')}/wp-json/wp/v2/posts`;
-        const credentials = Buffer.from(`${WP_USERNAME}:${WP_APP_PASSWORD}`).toString('base64');
+        const endpoint = `https://public-api.wordpress.com/rest/v1.1/sites/${WP_COM_SITE}/posts/new`;
 
         const response = await fetch(endpoint, {
             method: 'POST',
             headers: {
-                'Authorization': `Basic ${credentials}`,
+                'Authorization': `Bearer ${WP_COM_TOKEN}`,
                 'Content-Type': 'application/json'
             },
             body: JSON.stringify({
@@ -90,16 +88,16 @@ async function publishToCMS(postData, briefId) {
         });
 
         const data = await response.json();
-        if (data.id) {
-            console.log(`Agent 02: Successfully published to WordPress! Post ID: ${data.id}, URL: ${data.link}`);
-            return data.link;
+        if (data.ID) {
+            console.log(`Agent 02: ✅ Published to WordPress.com! Post ID: ${data.ID}, URL: ${data.URL}`);
+            return data.URL;
         } else {
-            console.error('Agent 02: WordPress publish failed. Response:', JSON.stringify(data));
+            console.error('Agent 02: WordPress.com publish failed:', JSON.stringify(data));
             const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
             return `${frontendUrl}/preview/${briefId}`;
         }
     } catch (err) {
-        console.error('Agent 02: WordPress API request error:', err.message);
+        console.error('Agent 02: WordPress.com API error:', err.message);
         const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
         return `${frontendUrl}/preview/${briefId}`;
     }
