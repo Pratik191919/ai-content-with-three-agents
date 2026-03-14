@@ -4,13 +4,15 @@ const { createClient } = require('@supabase/supabase-js');
 const redis = require('redis');
 const http = require('http');
 const { Server } = require('socket.io');
+
+// Safely load .env — works locally (../frontend/.env) and on Render (process.env directly)
 const fs = require('fs');
 const path = require('path');
 const dotenvPath = path.resolve(__dirname, '../frontend/.env');
 if (fs.existsSync(dotenvPath)) {
     require('dotenv').config({ path: dotenvPath });
 } else {
-    require('dotenv').config(); // Fallback to standard .env in same dir or just process.env
+    require('dotenv').config();
 }
 
 const app = express();
@@ -26,19 +28,37 @@ const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_KEY = process.env.SUPABASE_KEY;
 const REDIS_URL = process.env.REDIS_URL || 'redis://127.0.0.1:6379';
 
-if (!SUPABASE_URL || !SUPABASE_KEY) {
-    console.error('FATAL ERROR: SUPABASE_URL or SUPABASE_KEY is missing!');
-    console.log('Current SUPABASE_URL:', SUPABASE_URL ? 'PRESENT' : 'MISSING');
+// Safe Supabase initialization — NEVER crash on bad/missing URL
+let supabase = null;
+if (SUPABASE_URL && SUPABASE_KEY && /^https?:\/\//i.test(SUPABASE_URL)) {
+    supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
+    console.log('✅ Supabase connected:', SUPABASE_URL);
+} else {
+    console.error('⚠️  Supabase NOT connected — SUPABASE_URL or SUPABASE_KEY missing/invalid on this environment.');
+    console.error('    Set SUPABASE_URL and SUPABASE_KEY in Render Environment Variables.');
 }
 
-const supabase = createClient(SUPABASE_URL || 'http://placeholder', SUPABASE_KEY || 'placeholder');
+// Helper: return 503 if supabase not configured
+const requireSupabase = (res) => {
+    if (!supabase) {
+        res.status(503).json({ error: 'Database not configured. Set SUPABASE_URL and SUPABASE_KEY in environment variables.' });
+        return false;
+    }
+    return true;
+};
+
 const redisClient = redis.createClient({ url: REDIS_URL });
 
 app.get('/', (req, res) => {
-    res.json({ message: 'Content Engine API is running.' });
+    res.json({
+        message: 'Content Engine API is running.',
+        supabase: supabase ? 'connected' : 'not configured',
+        redis: REDIS_URL
+    });
 });
 
 app.get('/api/content/briefs', async (req, res) => {
+    if (!requireSupabase(res)) return;
     const { data, error } = await supabase
         .from('content_briefs')
         .select('id, title, target_keyword, status, created_at')
@@ -49,6 +69,7 @@ app.get('/api/content/briefs', async (req, res) => {
 });
 
 app.get('/api/content/posts', async (req, res) => {
+    if (!requireSupabase(res)) return;
     const { data, error } = await supabase
         .from('content')
         .select('id, title, seo_score, live_url, status, created_at')
@@ -59,6 +80,7 @@ app.get('/api/content/posts', async (req, res) => {
 });
 
 app.get('/api/content/posts/:briefId', async (req, res) => {
+    if (!requireSupabase(res)) return;
     const { data, error } = await supabase
         .from('content')
         .select('*')
@@ -67,11 +89,12 @@ app.get('/api/content/posts/:briefId', async (req, res) => {
 
     if (error) return res.status(500).json({ error: error.message });
     if (!data || data.length === 0) return res.status(404).json({ error: 'Post not found' });
-    
+
     res.json(data[0]);
 });
 
 app.get('/api/content/performance', async (req, res) => {
+    if (!requireSupabase(res)) return;
     const { data, error } = await supabase
         .from('post_performance')
         .select('*')
@@ -85,9 +108,10 @@ app.get('/api/content/performance', async (req, res) => {
 const PORT = process.env.PORT || 8000;
 
 server.listen(PORT, async () => {
+    console.log(`✅ API & WebSocket server running on port ${PORT}`);
     try {
         await redisClient.connect();
-        console.log(`✅ API & WebSocket server running on http://localhost:${PORT}`);
+        console.log('✅ Redis connected');
 
         // Subscribe to Redis events and stream to socket.io
         const subscriber = redis.createClient({ url: REDIS_URL });
@@ -99,6 +123,6 @@ server.listen(PORT, async () => {
             } catch (err) { }
         });
     } catch (err) {
-        console.error('Failed to start:', err);
+        console.error('Redis connection failed (non-fatal on Render free tier):', err.message);
     }
 });
