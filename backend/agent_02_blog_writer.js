@@ -7,6 +7,9 @@ const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_KEY = process.env.SUPABASE_KEY;
 const REDIS_URL = process.env.REDIS_URL || 'redis://127.0.0.1:6379';
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY || '';
+const WP_URL = process.env.WP_URL || 'https://ai-content.lovestoblog.com';
+const WP_USERNAME = process.env.WP_USERNAME;
+const WP_APP_PASSWORD = process.env.WP_APP_PASSWORD;
 
 const supabase = (SUPABASE_URL && SUPABASE_KEY && SUPABASE_URL.startsWith('http')) 
     ? createClient(SUPABASE_URL, SUPABASE_KEY) 
@@ -62,9 +65,44 @@ async function generateFeaturedImage(title) {
 }
 
 async function publishToCMS(postData, briefId) {
-    console.log(`Agent 02: Publishing '${postData.title}' to preview...`);
-    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
-    return `${frontendUrl}/preview/${briefId}`;
+    if (!WP_USERNAME || !WP_APP_PASSWORD) {
+        console.warn('Agent 02: WordPress credentials missing (WP_USERNAME/WP_APP_PASSWORD). Skipping WP publish.');
+        const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
+        return `${frontendUrl}/preview/${briefId}`;
+    }
+
+    console.log(`Agent 02: Publishing '${postData.title}' to WordPress at ${WP_URL}...`);
+    try {
+        const endpoint = `${WP_URL.replace(/\/$/, '')}/wp-json/wp/v2/posts`;
+        const credentials = Buffer.from(`${WP_USERNAME}:${WP_APP_PASSWORD}`).toString('base64');
+
+        const response = await fetch(endpoint, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Basic ${credentials}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                title: postData.title,
+                content: postData.html_content,
+                status: 'publish'
+            })
+        });
+
+        const data = await response.json();
+        if (data.id) {
+            console.log(`Agent 02: Successfully published to WordPress! Post ID: ${data.id}, URL: ${data.link}`);
+            return data.link;
+        } else {
+            console.error('Agent 02: WordPress publish failed. Response:', JSON.stringify(data));
+            const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
+            return `${frontendUrl}/preview/${briefId}`;
+        }
+    } catch (err) {
+        console.error('Agent 02: WordPress API request error:', err.message);
+        const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
+        return `${frontendUrl}/preview/${briefId}`;
+    }
 }
 
 async function processBrief(briefId) {
@@ -92,7 +130,7 @@ async function processBrief(briefId) {
         const { htmlContent, seoScore } = await generateBlogPost(brief);
 
         const imageUrl = await generateFeaturedImage(brief.title);
-        const liveUrl = await publishToCMS({ title: brief.title }, briefId);
+        const liveUrl = await publishToCMS({ title: brief.title, html_content: htmlContent }, briefId);
 
         const { data: postData, error: insertError } = await supabase.from('content').insert({
             brief_id: briefId,
