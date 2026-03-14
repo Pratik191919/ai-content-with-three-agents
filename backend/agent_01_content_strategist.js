@@ -15,19 +15,55 @@ const redisClient = redis.createClient({ url: REDIS_URL });
 
 const groq = GROQ_API_KEY ? new Groq({ apiKey: GROQ_API_KEY }) : null;
 
+// 8 rotating categories — each cycle picks a different one
+const BLOG_CATEGORIES = [
+    'Technology & AI',
+    'Food & Recipes',
+    'Travel & Adventure',
+    'Health & Fitness',
+    'Lifestyle',
+    'Fashion & Beauty',
+    'Personal Finance',
+    'CMS & Web Development'
+];
+
+let lastCategoryIndex = -1;
+
+function pickNextCategory() {
+    // Rotate to next category, skip same as last
+    let idx;
+    do {
+        idx = Math.floor(Math.random() * BLOG_CATEGORIES.length);
+    } while (idx === lastCategoryIndex && BLOG_CATEGORIES.length > 1);
+    lastCategoryIndex = idx;
+    return BLOG_CATEGORIES[idx];
+}
+
 async function scanTrends() {
-    console.log('Agent 01: Requesting dynamic trends from Groq AI (Llama 3.3)...');
+    const category = pickNextCategory();
+    console.log(`Agent 01: Requesting unique trend from Groq AI for category: [${category}]...`);
     if (!groq) throw new Error('GROQ_API_KEY is missing. Add it to your .env file.');
 
+    const seed = Date.now(); // ensures uniqueness each call
     let attempts = 0;
     while (attempts < 5) {
         try {
-            const prompt = "Generate 1 random hot trending topic in technology or marketing for 2026. Only return a valid JSON array containing exactly 1 object. Each object must have a 'topic' (string) and a 'trend_score' (number between 50 and 100). Do not use markdown blocks, just raw JSON.";
+            const prompt = `You are a content strategist. Generate 1 hot, trending, UNIQUE blog topic for the "${category}" category in 2026.
+Seed for uniqueness: ${seed}
+
+Return ONLY a valid JSON array with exactly 1 object. No markdown. Example format:
+[{"topic": "How AI is Transforming Home Cooking in 2026", "category": "Food & Recipes", "trend_score": 87}]
+
+Rules:
+- topic must be a specific, catchy, full blog post title (not just a keyword)
+- topic must be 100% unique and different from generic titles
+- category must be exactly: ${category}
+- trend_score must be a number between 60 and 100`;
 
             const completion = await groq.chat.completions.create({
                 model: 'llama-3.3-70b-versatile',
                 messages: [{ role: 'user', content: prompt }],
-                temperature: 0.8
+                temperature: 1.0  // max creativity for unique topics
             });
 
             const text = completion.choices[0].message.content;
@@ -53,15 +89,17 @@ async function deduplicateTrends(trends) {
 }
 
 async function generateBrief(topicData) {
-    console.log(`Agent 01: Generating brief for ${topicData.topic}...`);
+    const category = topicData.category || 'Technology & AI';
+    console.log(`Agent 01: Generating brief for [${category}] → ${topicData.topic}...`);
     return {
-        title: `Best ${topicData.topic} in 2026`,
-        target_keyword: topicData.topic.toLowerCase(),
-        secondary_keywords: ['guide', 'tutorial', 'best practices'],
-        outline: 'H2 Introduction\nH2 Top Tools\nH2 Benefits\nH2 Use Cases\nH2 Conclusion',
-        angle: 'Comprehensive review and ranking',
-        word_count_target: 1500,
-        trend_score: topicData.trend_score
+        title: topicData.topic,  // use AI-generated title directly (already catchy & unique)
+        target_keyword: topicData.topic.toLowerCase().split(' ').slice(0, 4).join(' '),
+        secondary_keywords: [category.toLowerCase(), '2026', 'guide'],
+        outline: 'H2 Introduction\nH2 Key Insights\nH2 Practical Tips\nH2 Future Outlook\nH2 Conclusion',
+        angle: `Trending ${category} perspective for 2026`,
+        word_count_target: 800,
+        trend_score: topicData.trend_score,
+        category: category
     };
 }
 

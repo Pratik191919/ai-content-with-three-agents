@@ -74,7 +74,7 @@ async function publishToCMS(postData, briefId) {
         return `${frontendUrl}/preview/${briefId}`;
     }
 
-    console.log(`Agent 02: Publishing '${postData.title}' to WordPress.com (${WP_COM_SITE})...`);
+    console.log(`Agent 02: Publishing '${postData.title}' [${postData.category || 'General'}] to WordPress.com...`);
     try {
         const endpoint = `https://public-api.wordpress.com/rest/v1.1/sites/${WP_COM_SITE}/posts/new`;
 
@@ -87,13 +87,15 @@ async function publishToCMS(postData, briefId) {
             body: JSON.stringify({
                 title: postData.title,
                 content: postData.html_content,
-                status: 'publish'
+                status: 'publish',
+                // Add category as a tag so posts are organized
+                tags: postData.category ? [postData.category, 'AI Generated', '2026'] : ['AI Generated']
             })
         });
 
         const data = await response.json();
         if (data.ID) {
-            console.log(`Agent 02: ✅ Published to WordPress.com! Post ID: ${data.ID}, URL: ${data.URL}`);
+            console.log(`Agent 02: ✅ Published! Post ID: ${data.ID}, Category: ${postData.category}, URL: ${data.URL}`);
             return data.URL;
         } else {
             console.error('Agent 02: WordPress.com publish failed:', JSON.stringify(data));
@@ -132,7 +134,7 @@ async function processBrief(briefId) {
         const { htmlContent, seoScore } = await generateBlogPost(brief);
 
         const imageUrl = await generateFeaturedImage(brief.title);
-        const liveUrl = await publishToCMS({ title: brief.title, html_content: htmlContent }, briefId);
+        const liveUrl = await publishToCMS({ title: brief.title, html_content: htmlContent, category: brief.category }, briefId);
 
         const { data: postData, error: insertError } = await supabase.from('content').insert({
             brief_id: briefId,
