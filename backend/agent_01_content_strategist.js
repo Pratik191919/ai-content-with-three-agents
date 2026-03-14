@@ -15,26 +15,34 @@ let genAI;
 let model;
 if (GEMINI_API_KEY) {
     genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
-    model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
+    model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
 }
 
 async function scanTrends() {
     console.log('Agent 01: Requesting dynamic trends from Gemini AI...');
-    try {
-        if (!model) throw new Error("Gemini model not initialized.");
-        const prompt = "Generate 1 random hot trending topic in technology or marketing for 2026. Only return a valid JSON array of objects containing exactly 1 object. Each object must have a 'topic' (string) and a 'trend_score' (number between 50 and 100). Do not use markdown blocks, just raw JSON.";
-        const result = await model.generateContent(prompt);
-        const text = result.response.text();
-        const cleaned = text.replace(/```json/gi, '').replace(/```/gi, '').trim();
-        return JSON.parse(cleaned);
-    } catch (e) {
-        console.error("Gemini failed, using fallback:", e);
-        const fallbacks = ["AI Startups", "Web3 Gaming", "Quantum Computing", "Serverless Architecture", "Edge AI", "Cybersecurity Mesh"];
-        let randoms = [];
-        for (let i = 0; i < 1; i++) {
-            randoms.push({ topic: fallbacks[Math.floor(Math.random() * fallbacks.length)] + ' ' + Math.floor(Math.random() * 100), trend_score: Math.floor(Math.random() * (100 - 70 + 1) + 70) });
+    let attempts = 0;
+    while (attempts < 5) {
+        try {
+            if (!model) throw new Error("Gemini model not initialized.");
+            const prompt = "Generate 1 random hot trending topic in technology or marketing for 2026. Only return a valid JSON array of objects containing exactly 1 object. Each object must have a 'topic' (string) and a 'trend_score' (number between 50 and 100). Do not use markdown blocks, just raw JSON.";
+            
+            // Force pure JSON from the model if supported, otherwise just rely on prompt instructions
+            const result = await model.generateContent(prompt);
+            const text = result.response.text();
+            
+            const cleaned = text.replace(/```json/gi, '').replace(/```/gi, '').trim();
+            const parsed = JSON.parse(cleaned);
+            return Array.isArray(parsed) ? parsed : [parsed];
+            
+        } catch (e) {
+            attempts++;
+            console.error(`Agent 01: Gemini API failed (Attempt ${attempts}/5). Retrying in 5 seconds... Error:`, e.message);
+            await new Promise(res => setTimeout(res, 5000));
+            if (attempts >= 5) {
+                console.error("Agent 01: All retries failed. Giving up for this cycle.");
+                throw new Error("Failed to scan trends. Free API exhausted.");
+            }
         }
-        return randoms;
     }
 }
 
@@ -104,7 +112,7 @@ async function runAgent01() {
         
         while (true) {
             await processTask();
-            console.log('Agent 01: Task complete. Sleeping for 04 hours...');
+            console.log('Agent 01: Task complete. Sleeping for 4 hours to fetch next trend...');
             await new Promise(resolve => setTimeout(resolve, 4 * 60 * 60 * 1000));
         }
     } catch (error) {

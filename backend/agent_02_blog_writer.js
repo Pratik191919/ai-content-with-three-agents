@@ -15,19 +15,40 @@ let genAI;
 let model;
 if (GEMINI_API_KEY) {
     genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
-    model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
+    model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
 }
 
 async function generateBlogPost(brief) {
-    console.log(`Agent 02: Generating content for brief: ${brief.title} using Gemini AI...`);
-    let htmlContent = `<h1>${brief.title}</h1>\n<p>This is a complete 2000-word post with optimized H2s and FAQs.</p>`;
+    console.log(`Agent 02: Initiating AI content generation for: ${brief.title}...`);
+    let htmlContent;
     try {
-        if (!model) throw new Error("Gemini model not initialized.");
-        const prompt = `Write a short 3-paragraph HTML formatted blog post for the topic: "${brief.title}". Include <h2> tags and <p> tags. Do not wrap in markdown tags like \`\`\`html.`;
-        const result = await model.generateContent(prompt);
+        if (!model) throw new Error("Gemini API key is missing or model not initialized.");
+        const prompt = `Write a totally unique, highly dynamic 500-800 word HTML blog post for the topic: "${brief.title}". 
+        Include:
+        - A unique, catchy introduction paragraph.
+        - Unique H2 and H3 tags specific to this exact topic.
+        - Detailed, uniquely written paragraphs filled with original thoughts.
+        Output ONLY raw HTML. Do not wrap it in markdown block tags like \`\`\`html.`;
+        
+        let result;
+        let attempts = 0;
+        // Automatic Retry Logic to prevent API timeouts!
+        while (attempts < 5) {
+            try {
+                result = await model.generateContent(prompt);
+                break; // If successful, exit the retry loop
+            } catch (err) {
+                attempts++;
+                console.warn(`Agent 02: Gemini API busy/rate-limited. Waiting 5 seconds before retry ${attempts}/5...`);
+                await new Promise(res => setTimeout(res, 5000));
+                if (attempts >= 5) throw err; // If all 5 retries fail, throw to the final catch
+            }
+        }
+        
         htmlContent = result.response.text().replace(/```html/gi, '').replace(/```/gi, '').trim();
     } catch (e) {
-        console.error("Gemini writing failed, using fallback", e);
+        console.error("Gemini AI completely failed to generate content:", e.message);
+        throw new Error("Generative AI was unable to generate content. Please check API Limits or model availability.");
     }
     const seoScore = Math.floor(Math.random() * (100 - 75 + 1) + 75);
     return { htmlContent, seoScore };
