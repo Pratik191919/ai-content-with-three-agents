@@ -63,7 +63,7 @@ app.get('/api/content/performance', async (req, res) => {
     const { data, error } = await supabase
         .from('post_performance')
         .select('*')
-        .order('created_at', { ascending: false })
+        .order('recorded_at', { ascending: false })
         .limit(50);
 
     if (error) return res.status(500).json({ error: error.message });
