@@ -4,7 +4,14 @@ const { createClient } = require('@supabase/supabase-js');
 const redis = require('redis');
 const http = require('http');
 const { Server } = require('socket.io');
-require('dotenv').config({ path: '../frontend/.env' });
+const fs = require('fs');
+const path = require('path');
+const dotenvPath = path.resolve(__dirname, '../frontend/.env');
+if (fs.existsSync(dotenvPath)) {
+    require('dotenv').config({ path: dotenvPath });
+} else {
+    require('dotenv').config(); // Fallback to standard .env in same dir or just process.env
+}
 
 const app = express();
 app.use(cors());
