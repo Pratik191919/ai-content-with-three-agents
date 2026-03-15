@@ -62,9 +62,28 @@ Rules:
     return { htmlContent, seoScore };
 }
 
-async function generateFeaturedImage(title) {
-    console.log(`Agent 02: Generating image for '${title}'...`);
-    return 'https://via.placeholder.com/800x400';
+function generateFeaturedImage(title, category) {
+    // Build a vivid, topic-specific prompt for the image
+    const categoryStyles = {
+        'Technology & AI':        'futuristic digital technology, glowing circuits, blue neon',
+        'Food & Recipes':         'delicious food photography, vibrant colors, natural lighting',
+        'Travel & Adventure':     'breathtaking landscape travel photography, golden hour',
+        'Health & Fitness':       'healthy lifestyle, fitness, energetic, bright clean colors',
+        'Lifestyle':              'modern lifestyle aesthetic, cozy, warm tones',
+        'Fashion & Beauty':       'high fashion editorial photography, elegant, stylish',
+        'Personal Finance':       'financial growth, money, charts, professional clean design',
+        'CMS & Web Development':  'web development code editor, dark theme, colorful syntax'
+    };
+
+    const style = categoryStyles[category] || 'professional blog header, modern design';
+    // Clean title for URL — remove special chars, limit length
+    const cleanTitle = title.replace(/[^a-zA-Z0-9\s]/g, '').trim().substring(0, 60);
+    const prompt = encodeURIComponent(`${cleanTitle}, ${style}, high quality, cinematic`);
+    const seed = Date.now() % 99999; // unique per post
+
+    const imageUrl = `https://image.pollinations.ai/prompt/${prompt}?width=1200&height=630&nologo=true&seed=${seed}`;
+    console.log(`Agent 02: 🎨 Image URL generated via Pollinations.ai for '${title}'`);
+    return imageUrl;
 }
 
 async function publishToCMS(postData, briefId) {
@@ -75,6 +94,17 @@ async function publishToCMS(postData, briefId) {
     }
 
     console.log(`Agent 02: Publishing '${postData.title}' [${postData.category || 'General'}] to WordPress.com...`);
+
+    // Prepend the AI-generated image to the post content
+    const imageHtml = postData.image_url
+        ? `<figure class="wp-block-image size-large" style="margin:0 0 2em 0;">
+    <img src="${postData.image_url}" alt="${postData.title}" style="width:100%;height:auto;border-radius:8px;display:block;" loading="lazy" />
+    <figcaption style="text-align:center;font-size:0.8em;color:#888;margin-top:0.5em;">AI Generated Image — ${postData.category || 'Blog'}</figcaption>
+  </figure>\n\n`
+        : '';
+
+    const fullContent = imageHtml + (postData.html_content || '');
+
     try {
         const endpoint = `https://public-api.wordpress.com/rest/v1.1/sites/${WP_COM_SITE}/posts/new`;
 
@@ -86,10 +116,11 @@ async function publishToCMS(postData, briefId) {
             },
             body: JSON.stringify({
                 title: postData.title,
-                content: postData.html_content,
+                content: fullContent,
                 status: 'publish',
-                // Add category as a tag so posts are organized
-                tags: postData.category ? [postData.category, 'AI Generated', '2026'] : ['AI Generated']
+                tags: postData.category
+                    ? [postData.category, 'AI Generated', '2026']
+                    : ['AI Generated']
             })
         });
 
@@ -133,8 +164,13 @@ async function processBrief(briefId) {
 
         const { htmlContent, seoScore } = await generateBlogPost(brief);
 
-        const imageUrl = await generateFeaturedImage(brief.title);
-        const liveUrl = await publishToCMS({ title: brief.title, html_content: htmlContent, category: brief.category }, briefId);
+        const imageUrl = generateFeaturedImage(brief.title, brief.category);
+        const liveUrl = await publishToCMS({
+            title: brief.title,
+            html_content: htmlContent,
+            category: brief.category,
+            image_url: imageUrl
+        }, briefId);
 
         const { data: postData, error: insertError } = await supabase.from('content').insert({
             brief_id: briefId,
