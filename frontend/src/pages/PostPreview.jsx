@@ -4,6 +4,17 @@ import axios from 'axios';
 import { ArrowLeft, ExternalLink, Calendar } from 'lucide-react';
 
 const PostPreview = () => {
+    // Helper to get image or generate a fallback pollinations URL
+    const getFeaturedImage = (post) => {
+        if (!post) return '';
+        if (post.featured_image_url && post.featured_image_url.startsWith('http') && !post.featured_image_url.includes('placeholder')) {
+            return post.featured_image_url;
+        }
+        const cleanTitle = post.title.replace(/[^a-zA-Z0-9\s]/g, '').trim().substring(0, 60);
+        const prompt = encodeURIComponent(`${cleanTitle}, cinematic lighting, high quality`);
+        return `https://image.pollinations.ai/prompt/${prompt}?width=1200&height=630&nologo=true&seed=${post.id || 123}`;
+    };
+
     const { briefId } = useParams();
     const [post, setPost] = useState(null);
     const [loading, setLoading] = useState(true);
@@ -58,14 +69,13 @@ const PostPreview = () => {
 
             <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
                 {/* Hero image */}
-                {post.featured_image_url && (
-                    <div style={{ position: 'relative', height: '340px', background: 'var(--bg-dark)', overflow: 'hidden' }}>
-                        <img
-                            src={post.featured_image_url}
-                            alt={post.title}
-                            style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
-                            onError={e => { e.target.parentElement.style.display='none'; }}
-                        />
+                <div style={{ position: 'relative', height: '340px', background: 'var(--bg-dark)', overflow: 'hidden' }}>
+                    <img
+                        src={getFeaturedImage(post)}
+                        alt={post.title}
+                        style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+                        onError={e => { e.target.parentElement.style.display='none'; }}
+                    />
                         {/* Gradient overlay */}
                         <div style={{
                             position: 'absolute', inset: 0,
@@ -90,20 +100,10 @@ const PostPreview = () => {
                             </div>
                         </div>
                     </div>
-                )}
+                </div>
 
                 {/* Post content */}
                 <div style={{ padding: '2rem 2.5rem' }}>
-                    {/* Title if no hero image */}
-                    {!post.featured_image_url && (
-                        <>
-                            <span className="badge published" style={{ marginBottom: '1rem', display: 'inline-block' }}>
-                                SEO Score: {post.seo_score}%
-                            </span>
-                            <h1 style={{ marginBottom: '1.5rem', fontSize: '1.875rem', lineHeight: '1.2' }}>{post.title}</h1>
-                        </>
-                    )}
-
                     {/* Blog body */}
                     <div
                         className="post-body"

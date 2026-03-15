@@ -6,11 +6,22 @@ import axios from 'axios';
 const API_BASE = (import.meta.env.VITE_API_URL || 'http://localhost:8000') + '/api/content';
 
 const Dashboard = () => {
+    // Helper to get image or generate a fallback pollinations URL
+    const getFeaturedImage = (post) => {
+        if (post.featured_image_url && post.featured_image_url.startsWith('http') && !post.featured_image_url.includes('placeholder')) {
+            return post.featured_image_url;
+        }
+        // Generate a stable fallback based on title
+        const cleanTitle = post.title.replace(/[^a-zA-Z0-9\s]/g, '').trim().substring(0, 60);
+        const prompt = encodeURIComponent(`${cleanTitle}, digital art, high quality`);
+        return `https://image.pollinations.ai/prompt/${prompt}?width=1200&height=630&nologo=true&seed=${post.id || 123}`;
+    };
+
     const [stats, setStats] = useState([
         { title: 'Briefs Generated', value: '—', color: 'var(--accent-purple)' },
-        { title: 'Posts Published',  value: '—', color: 'var(--accent-green)'  },
-        { title: 'Avg SEO Score',    value: '—', color: 'var(--accent-blue)'   },
-        { title: 'Rewrite Queue',    value: '—', color: 'var(--accent-red)'    },
+        { title: 'Posts Published', value: '—', color: 'var(--accent-green)' },
+        { title: 'Avg SEO Score', value: '—', color: 'var(--accent-blue)' },
+        { title: 'Rewrite Queue', value: '—', color: 'var(--accent-red)' },
     ]);
     const [recentPosts, setRecentPosts] = useState([]);
     const [recentBriefs, setRecentBriefs] = useState([]);
@@ -25,8 +36,8 @@ const Dashboard = () => {
                 ]);
 
                 const briefs = briefsRes.data || [];
-                const posts  = postsRes.data  || [];
-                const perfs  = perfRes.data   || [];
+                const posts = postsRes.data || [];
+                const perfs = perfRes.data || [];
 
                 const avgSeo = posts.length > 0
                     ? Math.round(posts.reduce((acc, p) => acc + (p.seo_score || 0), 0) / posts.length)
@@ -35,9 +46,9 @@ const Dashboard = () => {
 
                 setStats([
                     { title: 'Briefs Generated', value: briefs.length, color: 'var(--accent-purple)' },
-                    { title: 'Posts Published',  value: posts.length,  color: 'var(--accent-green)'  },
-                    { title: 'Avg SEO Score',    value: `${avgSeo}%`,  color: 'var(--accent-blue)'   },
-                    { title: 'Rewrite Queue',    value: rewrites,      color: 'var(--accent-red)'    },
+                    { title: 'Posts Published', value: posts.length, color: 'var(--accent-green)' },
+                    { title: 'Avg SEO Score', value: `${avgSeo}%`, color: 'var(--accent-blue)' },
+                    { title: 'Rewrite Queue', value: rewrites, color: 'var(--accent-red)' },
                 ]);
 
                 setRecentPosts(posts.slice(0, 6));
@@ -70,7 +81,7 @@ const Dashboard = () => {
             {/* Published Posts Grid with Thumbnails */}
             <div className="card" style={{ marginBottom: '1.75rem' }}>
                 <h2 style={{ marginBottom: '1.25rem', fontSize: '1.15rem' }}>
-                    🖼️ Recent AI-Published Posts
+                    🖼️ Recent Published Posts
                 </h2>
 
                 {recentPosts.length === 0 ? (
@@ -91,23 +102,17 @@ const Dashboard = () => {
                                 overflow: 'hidden',
                                 transition: 'transform 0.2s ease, box-shadow 0.2s ease'
                             }}
-                            onMouseEnter={e => { e.currentTarget.style.transform='translateY(-3px)'; e.currentTarget.style.boxShadow='0 8px 24px rgba(0,0,0,0.3)'; }}
-                            onMouseLeave={e => { e.currentTarget.style.transform=''; e.currentTarget.style.boxShadow=''; }}>
+                                onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-3px)'; e.currentTarget.style.boxShadow = '0 8px 24px rgba(0,0,0,0.3)'; }}
+                                onMouseLeave={e => { e.currentTarget.style.transform = ''; e.currentTarget.style.boxShadow = ''; }}>
                                 {/* Thumbnail */}
                                 <div style={{ position: 'relative', height: '160px', background: 'var(--bg-card)', overflow: 'hidden' }}>
-                                    {post.featured_image_url ? (
-                                        <img
-                                            src={post.featured_image_url}
-                                            alt={post.title}
-                                            style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                                            onError={e => { e.target.style.display='none'; }}
-                                            loading="lazy"
-                                        />
-                                    ) : (
-                                        <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '2.5rem' }}>
-                                            🤖
-                                        </div>
-                                    )}
+                                    <img
+                                        src={getFeaturedImage(post)}
+                                        alt={post.title}
+                                        style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                                        onError={e => { e.target.style.display = 'none'; }}
+                                        loading="lazy"
+                                    />
                                     {/* SEO badge */}
                                     {post.seo_score && (
                                         <span style={{
@@ -123,8 +128,10 @@ const Dashboard = () => {
 
                                 {/* Card body */}
                                 <div style={{ padding: '0.875rem' }}>
-                                    <p style={{ fontWeight: 600, fontSize: '0.875rem', marginBottom: '0.5rem', lineHeight: '1.4',
-                                        display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
+                                    <p style={{
+                                        fontWeight: 600, fontSize: '0.875rem', marginBottom: '0.5rem', lineHeight: '1.4',
+                                        display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden'
+                                    }}>
                                         {post.title}
                                     </p>
                                     <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>

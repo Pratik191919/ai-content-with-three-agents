@@ -64,27 +64,31 @@ Rules:
 }
 
 function generateFeaturedImage(title, category) {
-    // Build a vivid, topic-specific prompt for the image
+    // --- For the React frontend (Supabase) ---
+    // Pollinations.ai: AI-generated, works great in browser via direct URL
     const categoryStyles = {
-        'Technology & AI':        'futuristic digital technology, glowing circuits, blue neon',
-        'Food & Recipes':         'delicious food photography, vibrant colors, natural lighting',
-        'Travel & Adventure':     'breathtaking landscape travel photography, golden hour',
-        'Health & Fitness':       'healthy lifestyle, fitness, energetic, bright clean colors',
-        'Lifestyle':              'modern lifestyle aesthetic, cozy, warm tones',
-        'Fashion & Beauty':       'high fashion editorial photography, elegant, stylish',
-        'Personal Finance':       'financial growth, money, charts, professional clean design',
-        'CMS & Web Development':  'web development code editor, dark theme, colorful syntax'
+        'Technology & AI':       'futuristic digital technology, glowing circuits, blue neon',
+        'Food & Recipes':        'delicious food photography, vibrant colors, natural lighting',
+        'Travel & Adventure':    'breathtaking landscape travel photography, golden hour',
+        'Health & Fitness':      'healthy lifestyle, fitness, energetic, bright clean colors',
+        'Lifestyle':             'modern lifestyle aesthetic, cozy, warm tones',
+        'Fashion & Beauty':      'high fashion editorial photography, elegant, stylish',
+        'Personal Finance':      'financial growth, money, charts, professional clean design',
+        'CMS & Web Development': 'web development code editor, dark theme, colorful syntax'
     };
-
     const style = categoryStyles[category] || 'professional blog header, modern design';
-    // Clean title for URL — remove special chars, limit length
     const cleanTitle = title.replace(/[^a-zA-Z0-9\s]/g, '').trim().substring(0, 60);
     const prompt = encodeURIComponent(`${cleanTitle}, ${style}, high quality, cinematic`);
-    const seed = Date.now() % 99999; // unique per post
+    const seed = Date.now() % 99999;
+    const pollinationsUrl = `https://image.pollinations.ai/prompt/${prompt}?width=1200&height=630&nologo=true&seed=${seed}`;
 
-    const imageUrl = `https://image.pollinations.ai/prompt/${prompt}?width=1200&height=630&nologo=true&seed=${seed}`;
-    console.log(`Agent 02: 🎨 Image URL generated via Pollinations.ai for '${title}'`);
-    return imageUrl;
+    // --- For WordPress.com embed ---
+    // picsum.photos: real photos, seed-based (consistent per title), allowed by WP security
+    const picsumSeed = cleanTitle.toLowerCase().replace(/\s+/g, '-').substring(0, 40);
+    const wpImageUrl = `https://picsum.photos/seed/${picsumSeed}/1200/630`;
+
+    console.log(`Agent 02: 🎨 Images generated for '${title}'`);
+    return { pollinationsUrl, wpImageUrl };
 }
 
 async function publishToCMS(postData, briefId) {
@@ -96,11 +100,12 @@ async function publishToCMS(postData, briefId) {
 
     console.log(`Agent 02: Publishing '${postData.title}' [${postData.category || 'General'}] to WordPress.com...`);
 
-    // Prepend the AI-generated image to the post content
-    const imageHtml = postData.image_url
+    // Use wpImageUrl in WordPress content (picsum.photos — allowed by WP security)
+    // Use pollinationsUrl stored in Supabase (for React frontend display)
+    const imageHtml = postData.wp_image_url
         ? `<figure class="wp-block-image size-large" style="margin:0 0 2em 0;">
-    <img src="${postData.image_url}" alt="${postData.title}" style="width:100%;height:auto;border-radius:8px;display:block;" loading="lazy" />
-    <figcaption style="text-align:center;font-size:0.8em;color:#888;margin-top:0.5em;">AI Generated Image — ${postData.category || 'Blog'}</figcaption>
+    <img src="${postData.wp_image_url}" alt="${postData.title}" style="width:100%;height:auto;border-radius:8px;display:block;" />
+    <figcaption style="text-align:center;font-size:0.8em;color:#888;margin-top:0.5em;">📷 ${postData.category || 'Blog'} — AI Content Hub</figcaption>
   </figure>\n\n`
         : '';
 
@@ -165,12 +170,12 @@ async function processBrief(briefId) {
 
         const { htmlContent, seoScore } = await generateBlogPost(brief);
 
-        const imageUrl = generateFeaturedImage(brief.title, brief.category);
+        const { pollinationsUrl, wpImageUrl } = generateFeaturedImage(brief.title, brief.category);
         const liveUrl = await publishToCMS({
             title: brief.title,
             html_content: htmlContent,
             category: brief.category,
-            image_url: imageUrl
+            wp_image_url: wpImageUrl
         }, briefId);
 
         const { data: postData, error: insertError } = await supabase.from('content').insert({
@@ -179,7 +184,7 @@ async function processBrief(briefId) {
             html_content: htmlContent,
             seo_score: seoScore,
             live_url: liveUrl,
-            featured_image_url: imageUrl,
+            featured_image_url: pollinationsUrl,
             status: 'PUBLISHED'
         }).select();
 
