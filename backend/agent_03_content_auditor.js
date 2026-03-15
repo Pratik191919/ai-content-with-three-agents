@@ -1,11 +1,12 @@
 const { createClient } = require('@supabase/supabase-js');
 const redis = require('redis');
 const Groq = require('groq-sdk');
+const { isValidRedisUrl } = require('./redis-helper');
 require('dotenv').config({ path: '../frontend/.env' });
 
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_KEY = process.env.SUPABASE_KEY;
-const REDIS_URL = process.env.REDIS_URL || 'redis://127.0.0.1:6379';
+const REDIS_URL = process.env.REDIS_URL || '';
 const GROQ_API_KEY = process.env.GROQ_API_KEY;
 
 const supabase = (SUPABASE_URL && SUPABASE_KEY && SUPABASE_URL.startsWith('http'))
@@ -59,6 +60,10 @@ async function createRewriteBrief(postId, postData, metrics, score) {
         reason: `Low CTR (${metrics.ctr}%) and poor rank.`
     };
 
+    if (!isValidRedisUrl(REDIS_URL)) {
+        console.warn('Agent 03: Redis disabled — skipping rewrite event emit.');
+        return;
+    }
     const publishClient = redis.createClient({ url: REDIS_URL });
     await publishClient.connect();
     await publishClient.publish('content_events', JSON.stringify(eventData));
@@ -95,6 +100,10 @@ async function processAudit(postId) {
 
 async function listenForEvents() {
     console.log('Agent 03 - Content Auditor listening for events...');
+    if (!isValidRedisUrl(REDIS_URL)) {
+        console.warn('Agent 03: Redis disabled — REDIS_URL invalid. Auditor will be inactive.');
+        return;
+    }
     try {
         redisClient = redis.createClient({ url: REDIS_URL });
         await redisClient.connect();

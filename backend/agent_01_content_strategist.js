@@ -1,17 +1,23 @@
 const { createClient } = require('@supabase/supabase-js');
 const redis = require('redis');
 const Groq = require('groq-sdk');
+const { isValidRedisUrl } = require('./redis-helper');
 require('dotenv').config({ path: '../frontend/.env' });
 
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_KEY = process.env.SUPABASE_KEY;
-const REDIS_URL = process.env.REDIS_URL || 'redis://127.0.0.1:6379';
+const REDIS_URL = process.env.REDIS_URL || '';
 const GROQ_API_KEY = process.env.GROQ_API_KEY;
 
 const supabase = (SUPABASE_URL && SUPABASE_KEY && SUPABASE_URL.startsWith('http'))
     ? createClient(SUPABASE_URL, SUPABASE_KEY)
     : { from: () => ({ select: () => ({ eq: () => ({}) }), insert: () => ({ select: () => ({}) }), update: () => ({ eq: () => ({}) }) }) };
-const redisClient = redis.createClient({ url: REDIS_URL });
+
+// Guard: only create Redis client if URL is valid (redis:// or rediss://)
+const redisClient = isValidRedisUrl(REDIS_URL)
+    ? redis.createClient({ url: REDIS_URL })
+    : null;
+if (!redisClient) console.warn('Agent 01: Redis disabled — REDIS_URL is missing or invalid. Events will be skipped.');
 
 const groq = GROQ_API_KEY ? new Groq({ apiKey: GROQ_API_KEY }) : null;
 

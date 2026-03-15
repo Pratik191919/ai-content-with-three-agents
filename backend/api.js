@@ -4,6 +4,7 @@ const { createClient } = require('@supabase/supabase-js');
 const redis = require('redis');
 const http = require('http');
 const { Server } = require('socket.io');
+const { isValidRedisUrl } = require('./redis-helper');
 
 // Safely load .env — works locally (../frontend/.env) and on Render (process.env directly)
 const fs = require('fs');
@@ -24,7 +25,7 @@ const io = new Server(server, { cors: { origin: '*' } });
 
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_KEY = process.env.SUPABASE_KEY;
-const REDIS_URL = process.env.REDIS_URL || 'redis://127.0.0.1:6379';
+const REDIS_URL = process.env.REDIS_URL || '';
 const PORT = process.env.PORT || 8000;
 
 // Safe Supabase initialization — never crash on bad/missing URL
@@ -45,7 +46,17 @@ const requireSupabase = (res) => {
     return true;
 };
 
-const redisClient = redis.createClient({ url: REDIS_URL });
+// Safe Redis initialization — never crash on bad/missing URL
+const redisClient = isValidRedisUrl(REDIS_URL)
+    ? redis.createClient({ url: REDIS_URL })
+    : null;
+if (redisClient) {
+    redisClient.connect()
+        .then(() => console.log('✅ Redis connected'))
+        .catch(e => console.warn('⚠️  Redis connect failed:', e.message));
+} else {
+    console.warn('⚠️  Redis disabled — REDIS_URL missing or invalid.');
+}
 
 // ─── Routes ───────────────────────────────────────────────
 
