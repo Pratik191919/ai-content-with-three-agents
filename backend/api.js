@@ -57,6 +57,11 @@ app.get('/', (req, res) => {
     });
 });
 
+// Health check endpoint — used by cron-job.org to keep Render awake
+app.get('/health', (req, res) => {
+    res.json({ status: 'ok', timestamp: new Date().toISOString() });
+});
+
 app.get('/api/content/briefs', async (req, res) => {
     if (!requireSupabase(res)) return;
     const { data, error } = await supabase
