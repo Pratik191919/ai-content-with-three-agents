@@ -40,16 +40,7 @@ function calculatePerformanceScore(gscData, seoScore) {
 }
 
 async function createRewriteBrief(postId, postData, metrics, score) {
-    console.log(`Agent 03: Performance score ${score} < 60. Creating rewrite brief for ${postId}...`);
-
-    await supabase.from('post_performance').insert({
-        post_id: postId,
-        avg_position: metrics.avg_position,
-        clicks: metrics.clicks,
-        ctr: metrics.ctr,
-        impressions: metrics.impressions,
-        score: score
-    });
+    console.log(`Agent 03: Performance score ${score} < 60. Alerting for rewrite for ${postId}...`);
 
     console.log(`Agent 03: Sending rewrite task back to Agent 02...`);
 
@@ -88,10 +79,20 @@ async function processAudit(postId) {
 
         console.log(`Agent 03: Calculated score ${score} for post ${post.title}`);
 
+        // ALWAYS RECORD AUDIT DATA
+        await supabase.from('post_performance').insert({
+            post_id: postId,
+            avg_position: metrics.avg_position,
+            clicks: metrics.clicks,
+            ctr: metrics.ctr,
+            impressions: metrics.impressions,
+            score: score
+        });
+
         if (score < 60) {
             await createRewriteBrief(postId, post, metrics, score);
         } else {
-            console.log("Agent 03: Score is 60 or higher. No action needed.");
+            console.log("Agent 03: Score is 60 or higher. No rewrite needed.");
         }
     } catch (err) {
         console.error(`Error auditing post ${postId}:`, err);

@@ -35,14 +35,14 @@ const Dashboard = () => {
                     axios.get(`${API_BASE}/performance`)
                 ]);
 
-                const briefs = briefsRes.data || [];
-                const posts = postsRes.data || [];
-                const perfs = perfRes.data || [];
+                const briefs = Array.isArray(briefsRes.data) ? briefsRes.data : [];
+                const posts = Array.isArray(postsRes.data) ? postsRes.data : [];
+                const perfs = Array.isArray(perfRes.data) ? perfRes.data : [];
 
                 const avgSeo = posts.length > 0
                     ? Math.round(posts.reduce((acc, p) => acc + (p.seo_score || 0), 0) / posts.length)
                     : 0;
-                const rewrites = perfs.filter(p => p.score < 60).length;
+                const rewrites = perfs.filter(p => (p.score || 0) < 60).length;
 
                 setStats([
                     { title: 'Briefs Generated', value: briefs.length, color: 'var(--accent-purple)' },
@@ -55,6 +55,12 @@ const Dashboard = () => {
                 setRecentBriefs(briefs.slice(0, 4));
             } catch (err) {
                 console.error('Failed to fetch dashboard data:', err);
+                setStats([
+                    { title: 'Briefs Generated', value: 0, color: 'var(--accent-purple)' },
+                    { title: 'Posts Published', value: 0, color: 'var(--accent-green)' },
+                    { title: 'Avg SEO Score', value: '0%', color: 'var(--accent-blue)' },
+                    { title: 'Rewrite Queue', value: 0, color: 'var(--accent-red)' },
+                ]);
             }
         };
         fetchData();
@@ -134,6 +140,11 @@ const Dashboard = () => {
                                     }}>
                                         {post.title}
                                     </p>
+                                    <div style={{ marginBottom: '0.75rem' }}>
+                                        <span className="badge" style={{ background: 'rgba(255,255,255,0.05)', color: 'var(--text-secondary)', fontSize: '0.65rem' }}>
+                                            {post.category || 'General'}
+                                        </span>
+                                    </div>
                                     <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
                                         {post.live_url && post.live_url.startsWith('http') && (
                                             <a href={post.live_url} target="_blank" rel="noopener noreferrer"
@@ -160,6 +171,7 @@ const Dashboard = () => {
                         <thead>
                             <tr>
                                 <th>Title</th>
+                                <th>Category</th>
                                 <th>Keyword</th>
                                 <th>Status</th>
                                 <th>Date</th>
@@ -169,6 +181,9 @@ const Dashboard = () => {
                             {recentBriefs.map((b, i) => (
                                 <tr key={b.id || i}>
                                     <td style={{ fontWeight: 500 }}>{b.title}</td>
+                                    <td>
+                                        <span className="badge" style={{ fontSize: '0.65rem' }}>{b.category || 'General'}</span>
+                                    </td>
                                     <td style={{ color: 'var(--text-secondary)' }}>{b.target_keyword}</td>
                                     <td>
                                         <span className={`badge ${(b.status || '').toLowerCase()}`}>{b.status}</span>
@@ -178,7 +193,7 @@ const Dashboard = () => {
                             ))}
                             {recentBriefs.length === 0 && (
                                 <tr>
-                                    <td colSpan="4" style={{ textAlign: 'center', color: 'var(--text-secondary)' }}>
+                                    <td colSpan="5" style={{ textAlign: 'center', color: 'var(--text-secondary)' }}>
                                         No briefs found. Agents will generate soon!
                                     </td>
                                 </tr>

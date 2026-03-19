@@ -46,45 +46,40 @@ function pickNextCategory() {
 }
 
 async function scanTrends() {
-    const category = pickNextCategory();
-    console.log(`Agent 01: Requesting unique trend from Groq AI for category: [${category}]...`);
+    console.log(`Agent 01: Requesting unique trends from Groq AI...`);
     if (!groq) throw new Error('GROQ_API_KEY is missing. Add it to your .env file.');
 
-    const seed = Date.now(); // ensures uniqueness each call
+    const seed = Date.now();
     let attempts = 0;
     while (attempts < 5) {
         try {
-            const prompt = `You are a content strategist. Generate 1 hot, trending, UNIQUE blog topic for the "${category}" category in 2026.
-Seed for uniqueness: ${seed}
+            const prompt = `You are a content strategist. Generate 1 hot, trending blog topic for 2026.
+Seed: ${seed}
 
-Return ONLY a valid JSON array with exactly 1 object. No markdown. Example format:
-[{"topic": "How AI is Transforming Home Cooking in 2026", "category": "Food & Recipes", "trend_score": 87}]
+Choose the BEST category for this topic from this list:
+[${BLOG_CATEGORIES.join(', ')}]
+
+Return ONLY a valid JSON array with exactly 1 object.
+Format: [{"topic": "...", "category": "...", "trend_score": 87}]
 
 Rules:
-- topic must be a specific, catchy, full blog post title (not just a keyword)
-- topic must be 100% unique and different from generic titles
-- category must be exactly: ${category}
-- trend_score must be a number between 60 and 100`;
+- topic must be a specific, catchy blog title.
+- category MUST be one from the provided list.
+- trend_score must be 60-100.`;
 
             const completion = await groq.chat.completions.create({
                 model: 'llama-3.3-70b-versatile',
                 messages: [{ role: 'user', content: prompt }],
-                temperature: 1.0  // max creativity for unique topics
+                temperature: 0.9
             });
 
             const text = completion.choices[0].message.content;
             const cleaned = text.replace(/```json/gi, '').replace(/```/gi, '').trim();
             const parsed = JSON.parse(cleaned);
             return Array.isArray(parsed) ? parsed : [parsed];
-
         } catch (e) {
             attempts++;
-            console.error(`Agent 01: Groq API failed (Attempt ${attempts}/5). Retrying in 5 seconds... Error:`, e.message);
             await new Promise(res => setTimeout(res, 5000));
-            if (attempts >= 5) {
-                console.error('Agent 01: All retries failed. Giving up for this cycle.');
-                throw new Error('Failed to scan trends after 5 attempts.');
-            }
         }
     }
 }
@@ -124,6 +119,7 @@ async function processTask() {
                 outline: brief.outline,
                 angle: brief.angle,
                 status: 'PENDING',
+                category: brief.category,
                 word_count_target: brief.word_count_target,
                 trend_score: brief.trend_score
             }).select();

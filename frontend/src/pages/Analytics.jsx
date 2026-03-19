@@ -10,8 +10,9 @@ const Analytics = () => {
         const fetchData = async () => {
             try {
                 const res = await axios.get(`${import.meta.env.VITE_API_URL || 'http://localhost:8000'}/api/content/posts`);
-                setPosts(res.data);
+                setPosts(Array.isArray(res.data) ? res.data : []);
             } catch (err) {
+                setPosts([]);
                 console.error('Failed to fetch posts for analytics', err);
             }
         };
@@ -36,6 +37,7 @@ const Analytics = () => {
                     <thead>
                         <tr>
                             <th>Post Title</th>
+                            <th>Category</th>
                             <th>SEO Score</th>
                             <th>Status</th>
                             <th>Actions</th>
@@ -46,6 +48,9 @@ const Analytics = () => {
                         {posts.map((p, i) => (
                             <tr key={p.id || i}>
                                 <td style={{ fontWeight: 500 }}>{p.title}</td>
+                                <td>
+                                    <span className="badge" style={{ fontSize: '0.65rem' }}>{p.category || 'General'}</span>
+                                </td>
                                 <td style={{ color: 'var(--accent-blue)', fontWeight: 'bold' }}>{p.seo_score}%</td>
                                 <td>
                                     <span className={`badge ${p.status.toLowerCase()}`}>{p.status}</span>
@@ -78,7 +83,7 @@ const Analytics = () => {
                         ))}
                         {posts.length === 0 && (
                             <tr>
-                                <td colSpan="5" style={{ textAlign: 'center', color: 'var(--text-secondary)' }}>No published posts found yet.</td>
+                                <td colSpan="6" style={{ textAlign: 'center', color: 'var(--text-secondary)' }}>No published posts found yet.</td>
                             </tr>
                         )}
                     </tbody>

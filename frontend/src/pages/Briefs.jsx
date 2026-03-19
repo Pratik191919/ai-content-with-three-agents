@@ -8,8 +8,9 @@ const Briefs = () => {
         const fetchData = async () => {
             try {
                 const res = await axios.get(`${import.meta.env.VITE_API_URL || 'http://localhost:8000'}/api/content/briefs`);
-                setBriefs(res.data);
+                setBriefs(Array.isArray(res.data) ? res.data : []);
             } catch (err) {
+                setBriefs([]); // Ensure it stays an array on error
                 console.error('Failed to fetch briefs', err);
             }
         };
@@ -28,6 +29,7 @@ const Briefs = () => {
                     <thead>
                         <tr>
                             <th>Title</th>
+                            <th>Category</th>
                             <th>Keyword</th>
                             <th>Status</th>
                             <th>Created At</th>
@@ -37,6 +39,9 @@ const Briefs = () => {
                         {briefs.map((b, i) => (
                             <tr key={b.id || i}>
                                 <td style={{ fontWeight: 500 }}>{b.title}</td>
+                                <td>
+                                    <span className="badge" style={{ fontSize: '0.65rem' }}>{b.category || 'General'}</span>
+                                </td>
                                 <td style={{ color: 'var(--text-secondary)' }}>{b.target_keyword}</td>
                                 <td>
                                     <span className={`badge ${b.status.toLowerCase()}`}>{b.status}</span>
@@ -46,7 +51,7 @@ const Briefs = () => {
                         ))}
                         {briefs.length === 0 && (
                             <tr>
-                                <td colSpan="4" style={{ textAlign: 'center', color: 'var(--text-secondary)' }}>No briefs found.</td>
+                                <td colSpan="5" style={{ textAlign: 'center', color: 'var(--text-secondary)' }}>No briefs found.</td>
                             </tr>
                         )}
                     </tbody>

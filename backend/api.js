@@ -77,7 +77,7 @@ app.get('/api/content/briefs', async (req, res) => {
     if (!requireSupabase(res)) return;
     const { data, error } = await supabase
         .from('content_briefs')
-        .select('id, title, target_keyword, status, created_at')
+        .select('id, title, target_keyword, status, category, created_at')
         .order('created_at', { ascending: false });
     if (error) return res.status(500).json({ error: error.message });
     res.json(data);
@@ -87,7 +87,7 @@ app.get('/api/content/posts', async (req, res) => {
     if (!requireSupabase(res)) return;
     const { data, error } = await supabase
         .from('content')
-        .select('id, title, seo_score, live_url, status, created_at')
+        .select('id, title, category, seo_score, live_url, status, created_at')
         .order('created_at', { ascending: false });
     if (error) return res.status(500).json({ error: error.message });
     res.json(data);

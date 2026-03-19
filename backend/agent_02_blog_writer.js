@@ -181,6 +181,7 @@ async function processBrief(briefId) {
         const { data: postData, error: insertError } = await supabase.from('content').insert({
             brief_id: briefId,
             title: brief.title,
+            category: brief.category,
             html_content: htmlContent,
             seo_score: seoScore,
             live_url: liveUrl,
