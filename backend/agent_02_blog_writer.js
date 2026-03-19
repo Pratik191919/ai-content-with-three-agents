@@ -1,6 +1,8 @@
 const { createClient } = require('@supabase/supabase-js');
 const redis = require('redis');
 const Groq = require('groq-sdk');
+const axios = require('axios');
+const FormData = require('form-data');
 const { isValidRedisUrl } = require('./redis-helper');
 require('dotenv').config({ path: '../frontend/.env' });
 
@@ -14,7 +16,6 @@ const WP_COM_TOKEN = process.env.WP_COM_TOKEN ? decodeURIComponent(process.env.W
 const supabase = (SUPABASE_URL && SUPABASE_KEY && SUPABASE_URL.startsWith('http'))
     ? createClient(SUPABASE_URL, SUPABASE_KEY)
     : { from: () => ({ select: () => ({ eq: () => ({ eq: () => ({}) }), order: () => ({}) }), insert: () => ({ select: () => ({}) }), update: () => ({ eq: () => ({}) }) }) };
-let redisClient;
 
 const groq = GROQ_API_KEY ? new Groq({ apiKey: GROQ_API_KEY }) : null;
 
@@ -46,7 +47,7 @@ Rules:
 - Output ONLY article body HTML using these tags: <h2>, <h3>, <p>, <ul>, <li>, <strong>, <em>, <img>
 - For <img> tags, use this format: <img src="https://image.pollinations.ai/prompt/DESCRIPTIVE_PROMPT?width=800&height=450&nologo=true" alt="description" style="width:100%; border-radius:12px; margin: 24px 0;" />
 - Replace "DESCRIPTIVE_PROMPT" with a specific prompt (e.g. "futuristic-smartwatch-on-table").
-- Include at least 2-3 images throughout the post to break up the text.
+- Include 2-3 images. Don't use same prompt for images.
 - Write original, insightful paragraphs with unique H2 and H3 headings for this specific topic`;
 
             const completion = await groq.chat.completions.create({
@@ -62,14 +63,7 @@ Rules:
                     const seed = Math.floor(Math.random() * 100000);
                     return `https://image.pollinations.ai/prompt/${encodedPrompt}?width=800&height=450&nologo=true&seed=${seed}`;
                 })
-                .replace(/```html/gi, '').replace(/```/gi, '')
-                .replace(/<style[\s\S]*?<\/style>/gi, '')
-                .replace(/<script[\s\S]*?<\/script>/gi, '')
-                .replace(/<!DOCTYPE[^>]*>/gi, '')
-                .replace(/<\/?html[^>]*>/gi, '')
-                .replace(/<\/?head[^>]*>/gi, '')
-                .replace(/<\/?body[^>]*>/gi, '')
-                .trim();
+                .replace(/```html/gi, '').replace(/```/gi, '').trim();
             
             if (finalHtml) break;
         } catch (err) {
@@ -83,24 +77,34 @@ Rules:
 async function publishToCMS(postData, briefId) {
     if (!WP_COM_TOKEN) return `${process.env.FRONTEND_URL || 'http://localhost:5173'}/preview/${briefId}`;
 
-    console.log(`Agent 02: Publishing '${postData.title}' to WordPress.com...`);
+    console.log(`Agent 02: Publishing '${postData.title}' to WordPress.com (with Physical Media Upload)...`);
     let featuredMediaId = null;
 
     if (postData.wp_image_url) {
         try {
-            const mediaEndpoint = `https://public-api.wordpress.com/rest/v1.1/sites/${WP_COM_SITE}/media/new`;
-            const mediaRes = await fetch(mediaEndpoint, {
-                method: 'POST',
-                headers: { 'Authorization': `Bearer ${WP_COM_TOKEN}`, 'Content-Type': 'application/json' },
-                body: JSON.stringify({ media_urls: [postData.wp_image_url] })
+            console.log('Agent 02: Downloading AI Image for physical upload...');
+            const imageRes = await axios.get(postData.wp_image_url, { responseType: 'arraybuffer' });
+            
+            const form = new FormData();
+            form.append('media[]', Buffer.from(imageRes.data), {
+                filename: 'featured-image.jpg',
+                contentType: 'image/jpeg',
             });
-            const mediaData = await mediaRes.json();
-            if (mediaData.media?.[0]?.ID) {
-                featuredMediaId = mediaData.media[0].ID;
-                console.log(`Agent 02: ✅ Image uploaded! Media ID: ${featuredMediaId}`);
+
+            console.log('Agent 02: Uploading physical file to WordPress...');
+            const uploadRes = await axios.post(`https://public-api.wordpress.com/rest/v1.1/sites/${WP_COM_SITE}/media/new`, form, {
+                headers: {
+                    ...form.getHeaders(),
+                    'Authorization': `Bearer ${WP_COM_TOKEN}`
+                }
+            });
+
+            if (uploadRes.data.media?.[0]?.ID) {
+                featuredMediaId = uploadRes.data.media[0].ID;
+                console.log(`Agent 02: ✅ Media Uploaded Successfully! ID: ${featuredMediaId}`);
             }
         } catch (err) {
-            console.error('Agent 02: Media upload failed:', err.message);
+            console.error('Agent 02: Media upload failed (falling back to URL):', err.message);
         }
     }
 
@@ -109,24 +113,25 @@ async function publishToCMS(postData, briefId) {
         : '';
 
     try {
-        const response = await fetch(`https://public-api.wordpress.com/rest/v1.1/sites/${WP_COM_SITE}/posts/new`, {
-            method: 'POST',
-            headers: { 'Authorization': `Bearer ${WP_COM_TOKEN}`, 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                title: postData.title,
-                content: imageHtml + (postData.html_content || ''),
-                status: 'publish',
-                featured_image: featuredMediaId || postData.wp_image_url,
-                categories: postData.category || 'General',
-                tags: [postData.category || 'AI Generated', '2026']
-            })
+        const response = await axios.post(`https://public-api.wordpress.com/rest/v1.1/sites/${WP_COM_SITE}/posts/new`, {
+            title: postData.title,
+            content: imageHtml + (postData.html_content || ''),
+            status: 'publish',
+            featured_image: featuredMediaId || postData.wp_image_url,
+            categories: postData.category || 'General',
+            tags: [postData.category || 'Global', 'AI Hub', '2026']
+        }, {
+            headers: { 'Authorization': `Bearer ${WP_COM_TOKEN}` }
         });
 
-        const data = await response.json();
-        return data.URL || `${process.env.FRONTEND_URL || 'http://localhost:5173'}/preview/${briefId}`;
+        if (response.data.ID) {
+            console.log(`Agent 02: ✅ Published! URL: ${response.data.URL}`);
+            return response.data.URL;
+        }
     } catch (err) {
-        return `${process.env.FRONTEND_URL || 'http://localhost:5173'}/preview/${briefId}`;
+        console.error('Agent 02: WordPress publish failed:', err.response?.data || err.message);
     }
+    return `${process.env.FRONTEND_URL || 'http://localhost:5173'}/preview/${briefId}`;
 }
 
 async function processBrief(briefId) {
@@ -139,10 +144,9 @@ async function processBrief(briefId) {
 
         await supabase.from('content_briefs').update({ status: 'IN_PROGRESS' }).eq('id', briefId);
         
-        await logActivity('Writer (Agent 02)', 'INFO', `Generating: ${brief.title}`);
+        await logActivity('Writer (Agent 02)', 'INFO', `Generating physical image & post: ${brief.title}`);
         const { htmlContent, seoScore } = await generateBlogPost(brief);
         
-        // --- PREFER THE PRE-GENERATED IMAGE FROM BRIEF ---
         const finalImageUrl = brief.featured_image_url || `https://picsum.photos/seed/${briefId}/1200/630`;
 
         const liveUrl = await publishToCMS({
@@ -152,7 +156,7 @@ async function processBrief(briefId) {
             wp_image_url: finalImageUrl
         }, briefId);
 
-        await logActivity('Writer (Agent 02)', 'SUCCESS', `Published: ${brief.title}`, { url: liveUrl });
+        await logActivity('Writer (Agent 02)', 'SUCCESS', `Published article with featured image: ${brief.title}`, { url: liveUrl });
 
         await supabase.from('content').insert({
             brief_id: briefId,
@@ -179,12 +183,12 @@ async function processBrief(briefId) {
 }
 
 async function listenForEvents() {
-    console.log('Agent 02 - Blog Writer listening...');
+    console.log('Agent 02 - Blog Writer listening (Physical Media Mode enabled)...');
     if (!isValidRedisUrl(REDIS_URL)) return;
     try {
-        redisClient = redis.createClient({ url: REDIS_URL });
-        await redisClient.connect();
-        await redisClient.subscribe('content_events', (message) => {
+        const subClient = redis.createClient({ url: REDIS_URL });
+        await subClient.connect();
+        await subClient.subscribe('content_events', (message) => {
             const data = JSON.parse(message);
             if (data.event === 'content_briefs_ready') processBrief(data.brief_id);
         });
