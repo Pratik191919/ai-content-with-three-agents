@@ -32,6 +32,10 @@ function requireSupabase(res) {
 
 // ─── Endpoints ───────────────────────────────────────────────
 
+app.get('/health', (req, res) => {
+    res.status(200).json({ status: 'OK', timestamp: new Date().toISOString() });
+});
+
 app.get('/api/content/briefs', async (req, res) => {
     if (!requireSupabase(res)) return;
     const { data, error } = await supabase
