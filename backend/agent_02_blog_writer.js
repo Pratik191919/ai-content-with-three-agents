@@ -108,9 +108,18 @@ async function publishToCMS(postData, briefId) {
         }
     }
 
-    const imageHtml = postData.wp_image_url
-        ? `<figure class="wp-block-image size-large"><img src="${postData.wp_image_url}" alt="${postData.title}" /></figure>\n\n`
-        : '';
+    // --- Image Generation Fallback ---
+    let featuredImageUrl = postData.wp_image_url;
+    if (!featuredImageUrl) {
+        console.log(`Agent 02: ⚠️ No image URL found in brief. Generating fallback image for title: ${postData.title}`);
+        const fallbackPrompt = encodeURIComponent(`Professional high-resolution featured image for a blog titled "${postData.title}", cinematic lighting, 8k, digital art style`);
+        featuredImageUrl = `https://pollinations.ai/p/${fallbackPrompt}?width=1024&height=768&seed=${Math.floor(Math.random() * 1000000)}&nologo=true`;
+    }
+
+    // Wrap in Official WordPress Gutenberg Image Blocks for better theme recognition
+    const imageHtml = `<!-- wp:image {"align":"center","sizeSlug":"large","linkDestination":"none"} -->
+<figure class="wp-block-image aligncenter size-large"><img src="${featuredImageUrl}" alt="${postData.title}" class="wp-image-auto"/></figure>
+<!-- /wp:image -->`;
 
     try {
         const response = await axios.post(`https://public-api.wordpress.com/rest/v1.1/sites/${WP_COM_SITE}/posts/new`, {
