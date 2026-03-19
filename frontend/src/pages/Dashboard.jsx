@@ -4,6 +4,7 @@ import axios from 'axios';
 
 const API_BASE = (import.meta.env.VITE_API_URL || 'http://localhost:8000') + '/api/content';
 
+const Dashboard = () => {
     const getFeaturedImage = (post) => {
         if (post.featured_image_url && post.featured_image_url.startsWith('http') && !post.featured_image_url.includes('placeholder')) {
             return post.featured_image_url;

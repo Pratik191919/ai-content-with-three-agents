@@ -70,6 +70,7 @@ body {
   flex-direction: column;
   transition: transform 0.3s ease, width 0.3s ease;
   z-index: 50;
+  overflow: hidden; /* Added to prevent overlap when closed */
 }
 
 .sidebar.collapsed {
