@@ -10,6 +10,7 @@ import ContentCalendar from './pages/ContentCalendar';
 import Analytics from './pages/Analytics';
 import VisionBoard from './pages/VisionBoard';
 import PostPreview from './pages/PostPreview';
+import Logs from './pages/Logs';
 import './index.css';
 
 const NAV_ITEMS = [
@@ -18,6 +19,7 @@ const NAV_ITEMS = [
   { to: '/calendar',  icon: Calendar,         label: 'Content Calendar' },
   { to: '/analytics', icon: LineChart,        label: 'Performance Analytics' },
   { to: '/vision',    icon: Activity,         label: 'Vision Board (Live)' },
+  { to: '/logs',      icon: Activity,         label: 'System Logs' },
 ];
 
 function AppLayout() {
@@ -139,6 +141,7 @@ function AppLayout() {
             <Route path="/calendar"  element={<ContentCalendar />} />
             <Route path="/analytics" element={<Analytics />} />
             <Route path="/vision"    element={<VisionBoard />} />
+            <Route path="/logs"      element={<Logs />} />
             <Route path="/preview/:briefId" element={<PostPreview />} />
           </Routes>
         </div>

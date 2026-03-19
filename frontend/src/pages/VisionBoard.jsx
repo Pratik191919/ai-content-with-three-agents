@@ -1,11 +1,35 @@
 import React, { useState, useEffect } from 'react';
 import { Activity, Radio, Cpu, Send, ShieldCheck } from 'lucide-react';
 import { io } from 'socket.io-client';
+import axios from 'axios';
 
 const VisionBoard = () => {
     const [events, setEvents] = useState([]);
 
     useEffect(() => {
+        const fetchHistory = async () => {
+            try {
+                const res = await axios.get(`${import.meta.env.VITE_API_URL || 'http://localhost:8000'}/api/content/logs`);
+                const historical = res.data.slice(0, 10).map(log => {
+                    let icon = Radio;
+                    let color = 'var(--accent-blue)';
+                    if (log.agent_name.includes('Strategist')) { icon = Cpu; color = 'var(--accent-purple)'; }
+                    if (log.agent_name.includes('Writer')) { icon = Send; color = 'var(--accent-green)'; }
+                    if (log.agent_name.includes('Auditor')) { icon = ShieldCheck; color = 'var(--accent-red)'; }
+
+                    return {
+                        id: log.id,
+                        agent: log.agent_name,
+                        message: log.message,
+                        icon, color,
+                        time: new Date(log.created_at).toLocaleTimeString()
+                    };
+                });
+                setEvents(historical);
+            } catch (err) { console.error('History fetch failed', err); }
+        };
+        fetchHistory();
+
         const socket = io(import.meta.env.VITE_API_URL || 'http://localhost:8000');
 
         socket.on('agent_event', (data) => {

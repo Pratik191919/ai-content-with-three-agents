@@ -21,6 +21,20 @@ if (!redisClient) console.warn('Agent 01: Redis disabled — REDIS_URL is missin
 
 const groq = GROQ_API_KEY ? new Groq({ apiKey: GROQ_API_KEY }) : null;
 
+async function logActivity(agentName, eventType, message, metadata = {}) {
+    try {
+        if (!supabase) return;
+        await supabase.from('agent_logs').insert({
+            agent_name: agentName,
+            event_type: eventType,
+            message: message,
+            metadata: metadata
+        });
+    } catch (err) {
+        console.error('Logging failed:', err.message);
+    }
+}
+
 // 8 rotating categories — each cycle picks a different one
 const BLOG_CATEGORIES = [
     'Technology & AI',
@@ -138,10 +152,12 @@ async function processTask() {
 
                 await redisClient.publish('content_events', JSON.stringify(eventData));
                 console.log(`Agent 01: Brief saved & event 'content_briefs_ready' published for brief ID ${briefId}`);
+                await logActivity('Strategist (Agent 01)', 'SUCCESS', `Generated brief for trend: ${brief.title}`, { brief_id: briefId });
             }
         }
     } catch (error) {
         console.error('Unexpected error during task execution:', error);
+        await logActivity('Strategist (Agent 01)', 'ERROR', `Task execution failed`, { error: error.message });
     }
 }
 

@@ -18,6 +18,20 @@ let redisClient;
 
 const groq = GROQ_API_KEY ? new Groq({ apiKey: GROQ_API_KEY }) : null;
 
+async function logActivity(agentName, eventType, message, metadata = {}) {
+    try {
+        if (!supabase) return;
+        await supabase.from('agent_logs').insert({
+            agent_name: agentName,
+            event_type: eventType,
+            message: message,
+            metadata: metadata
+        });
+    } catch (err) {
+        console.error('Logging failed:', err.message);
+    }
+}
+
 async function generateBlogPost(brief) {
     console.log(`Agent 02: Generating blog post with Groq AI (Llama 3.3) for: ${brief.title}...`);
     if (!groq) throw new Error('GROQ_API_KEY is missing.');
@@ -145,11 +159,13 @@ async function publishToCMS(postData, briefId) {
             return data.URL;
         } else {
             console.error('Agent 02: WordPress.com publish failed:', JSON.stringify(data));
+            await logActivity('Writer (Agent 02)', 'ERROR', `WordPress publish failed for '${postData.title}'`, { error: JSON.stringify(data) });
             const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
             return `${frontendUrl}/preview/${briefId}`;
         }
     } catch (err) {
         console.error('Agent 02: WordPress.com API error:', err.message);
+        await logActivity('Writer (Agent 02)', 'ERROR', `API system error during WordPress publish: '${postData.title}'`, { error: err.message });
         const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
         return `${frontendUrl}/preview/${briefId}`;
     }
@@ -180,12 +196,17 @@ async function processBrief(briefId) {
         const { htmlContent, seoScore } = await generateBlogPost(brief);
 
         const { pollinationsUrl, wpImageUrl } = generateFeaturedImage(brief.title, brief.category);
+        
+        await logActivity('Writer (Agent 02)', 'INFO', `Started content generation for: ${brief.title}`);
+
         const liveUrl = await publishToCMS({
             title: brief.title,
             html_content: htmlContent,
             category: brief.category,
             wp_image_url: wpImageUrl
         }, briefId);
+
+        await logActivity('Writer (Agent 02)', 'SUCCESS', `Published article: ${brief.title}`, { post_id: briefId, url: liveUrl });
 
         const { data: postData, error: insertError } = await supabase.from('content').insert({
             brief_id: briefId,
