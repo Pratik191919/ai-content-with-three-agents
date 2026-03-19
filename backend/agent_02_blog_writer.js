@@ -74,38 +74,64 @@ Rules:
     return { htmlContent: finalHtml, seoScore: Math.floor(Math.random() * 25 + 75) };
 }
 
+const Replicate = require('replicate');
+const replicate = new Replicate({ auth: process.env.REPLICATE_API_TOKEN });
+
+/**
+ * Official WordPress Media Sideloading and Publishing
+ * Handles 1 Featured Image + 3 Content Images using Stable Diffusion (Replicate)
+ */
 async function publishToCMS(postData, briefId) {
-    if (!WP_COM_TOKEN || !WP_COM_SITE) {
-        console.warn('Agent 02: WordPress.com credentials missing. Falling back to local preview.');
+    if (!WP_COM_TOKEN || !WP_COM_SITE || !process.env.REPLICATE_API_TOKEN) {
+        console.warn('Agent 02: Missing Credentials. Falling back to local preview.');
         return `${process.env.FRONTEND_URL || 'http://localhost:5173'}/preview/${briefId}`;
     }
 
     try {
-        console.log(`Agent 02: 📸 Generating 4 unique AI images for: ${postData.title}`);
+        console.log(`Agent 02: 📸 Generating 4 High-End Stable Diffusion images for: ${postData.title}`);
         
-        // Define 4 distinct image prompts as per architecture
+        // Define 4 professional cinematic prompts
         const prompts = [
-            `Professional 8k cinematic featured cover image for ${postData.title}, futuristic digital art`,
-            `Intricate conceptual illustration for ${postData.title}, high resolution, scientific style`,
-            `Futuristic visualization for ${postData.title}, vivid colors, masterpiece`,
-            `Modern infographic-style digital art for ${postData.title}, clean design, 8k`
+            `${postData.title}, professional modern AI blog cover thumbnail, cinematic lighting, 8k resolution, clean design`,
+            `${postData.title}, futuristic conceptual visualization, intricate digital art, mastery, high detail`,
+            `${postData.title}, abstract technology concept, glowing elements, future aesthetics, vivid colors`,
+            `${postData.title}, digital infographic visualization art, artistic and clean, professional masterpiece`
         ];
 
         const uploadedMedia = [];
 
-        // Step 1: Upload 4 physical images to WordPress Media API
+        // Upload 4 physical images to WordPress Media Library
         for (let i = 0; i < prompts.length; i++) {
-            const seed = Math.floor(Math.random() * 1000000);
-            const imageUrl = `https://pollinations.ai/p/${encodeURIComponent(prompts[i])}?width=1024&height=768&seed=${seed}&nologo=true`;
-            
             try {
+                process.stdout.write(`Agent 02: 🤖 Generating Image ${i+1}/4 via Replicate... `);
+                
+                // Call Replicate (Stable Diffusion XL)
+                const output = await replicate.run(
+                    "stability-ai/sdxl:7762fd07cf27411a72d45b46e3968600d8ce20dcf16d47b0a3f6517173e35195",
+                    {
+                        input: {
+                            prompt: prompts[i],
+                            width: 1024,
+                            height: 1024,
+                            refiner: "expert_ensemble_refiner",
+                            apply_watermark: false
+                        }
+                    }
+                );
+
+                const imageUrl = output[0];
+                console.log(`Success! URL: ${imageUrl}`);
+
+                // Download the generated image bytes
                 const imageRes = await axios.get(imageUrl, { responseType: 'arraybuffer' });
+                
                 const form = new FormData();
                 form.append('media[]', Buffer.from(imageRes.data), {
-                    filename: `image-${i}-${Date.now()}.jpg`,
+                    filename: `sdxl-${i}-${Date.now()}.jpg`,
                     contentType: 'image/jpeg',
                 });
 
+                // Post to WordPress Media API
                 const uploadRes = await axios.post(`https://public-api.wordpress.com/rest/v1.1/sites/${WP_COM_SITE}/media/new`, form, {
                     headers: {
                         ...form.getHeaders(),
@@ -114,14 +140,18 @@ async function publishToCMS(postData, briefId) {
                 });
 
                 if (uploadRes.data.media?.[0]?.ID) {
-                    const media = uploadRes.data.media[0];
-                    uploadedMedia.push({ id: media.ID, url: media.URL });
-                    console.log(`Agent 02: ✅ Image ${i+1}/4 Uploaded Successfully! ID: ${media.ID}`);
+                    uploadedMedia.push({ 
+                        id: uploadRes.data.media[0].ID, 
+                        url: uploadRes.data.media[0].URL 
+                    });
+                    console.log(`Agent 02: ✅ Sideloaded to Media Library (ID: ${uploadRes.data.media[0].ID})`);
                 }
             } catch (err) {
-                console.error(`Agent 02: ❌ Failed to upload image ${i+1}:`, err.message);
+                console.error(`\nAgent 02: ❌ Failed Image ${i+1}:`, err.message);
             }
         }
+
+        // --- Rest of CMS Logic: Gallery Linking & Gutenberg Formatting ---
 
         // Step 2: Embed Images into Content (Gutenberg Format with ID Linking)
         let finalContent = postData.html_content || '';
