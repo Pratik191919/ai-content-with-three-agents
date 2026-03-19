@@ -16,6 +16,20 @@ let redisClient;
 
 const groq = GROQ_API_KEY ? new Groq({ apiKey: GROQ_API_KEY }) : null;
 
+async function logActivity(agentName, eventType, message, metadata = {}) {
+    try {
+        if (!supabase) return;
+        await supabase.from('agent_logs').insert({
+            agent_name: agentName,
+            event_type: eventType,
+            message: message,
+            metadata: metadata
+        });
+    } catch (err) {
+        console.error('Logging failed:', err.message);
+    }
+}
+
 async function fetchGSCData(url) {
     console.log(`Agent 03: Simulating dynamic GSC data for ${url}...`);
     return {
@@ -91,11 +105,14 @@ async function processAudit(postId) {
 
         if (score < 60) {
             await createRewriteBrief(postId, post, metrics, score);
+            await logActivity('Auditor (Agent 03)', 'ERROR', `SEO Alert! Low performance for: ${post.title}`, { score, postId });
         } else {
             console.log("Agent 03: Score is 60 or higher. No rewrite needed.");
+            await logActivity('Auditor (Agent 03)', 'SUCCESS', `SEO Audit Complete for: ${post.title}`, { score, postId });
         }
     } catch (err) {
         console.error(`Error auditing post ${postId}:`, err);
+        await logActivity('Auditor (Agent 03)', 'ERROR', `Audit failed for post ID ${postId}`, { error: err.message });
     }
 }
 
@@ -124,4 +141,28 @@ async function listenForEvents() {
     }
 }
 
-listenForEvents();
+async function runPeriodicAudit() {
+    console.log('Agent 03: Starting periodic 4-hour SEO audit...');
+    try {
+        const { data: posts, error } = await supabase.from('content').select('id').eq('status', 'PUBLISHED');
+        if (!error && posts) {
+            for (const post of posts) {
+                await processAudit(post.id);
+            }
+        }
+    } catch (e) { console.error('Periodic audit fail', e); }
+}
+
+async function startAuditor() {
+    listenForEvents();
+    
+    // Periodic audit every 4 hours
+    while (true) {
+        await logActivity('Auditor (Agent 03)', 'INFO', 'Starting system-wide SEO performance sweep');
+        await runPeriodicAudit();
+        console.log('Agent 03: Sweep complete. Sleeping for 4 hours...');
+        await new Promise(res => setTimeout(res, 4 * 60 * 60 * 1000));
+    }
+}
+
+startAuditor();

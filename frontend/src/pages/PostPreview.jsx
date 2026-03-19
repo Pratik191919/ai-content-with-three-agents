@@ -1,118 +1,97 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import axios from 'axios';
-import { ArrowLeft, ExternalLink, Calendar } from 'lucide-react';
+import { ChevronLeft, ExternalLink, Calendar, Tag, ShieldCheck } from 'lucide-react';
 
 const PostPreview = () => {
-    // Helper to get image or generate a fallback pollinations URL
-    const getFeaturedImage = (post) => {
-        if (!post) return '';
-        if (post.featured_image_url && post.featured_image_url.startsWith('http') && !post.featured_image_url.includes('placeholder')) {
-            return post.featured_image_url;
-        }
-        const cleanTitle = (post.title || '').replace(/[^a-zA-Z0-9\s]/g, '').trim().substring(0, 60);
-        const prompt = encodeURIComponent(`${cleanTitle}, cinematic lighting, high quality`);
-        return `https://image.pollinations.ai/prompt/${prompt}?width=1200&height=630&nologo=true&seed=${post.id || 123}`;
-    };
-
     const { briefId } = useParams();
     const [post, setPost] = useState(null);
     const [loading, setLoading] = useState(true);
 
+    const API_BASE = (import.meta.env.VITE_API_URL || 'http://localhost:8000') + '/api/content';
+
     useEffect(() => {
         const fetchPost = async () => {
             try {
-                const res = await axios.get(
-                    `${import.meta.env.VITE_API_URL || 'http://localhost:8000'}/api/content/posts/${briefId}`
-                );
-                setPost(res.data);
+                const res = await axios.get(`${API_BASE}/posts`);
+                const found = res.data.find(p => String(p.brief_id) === String(briefId) || String(p.id) === String(briefId));
+                setPost(found);
             } catch (err) {
-                console.error(err);
+                console.error('Failed to fetch post', err);
+            } finally {
+                setLoading(false);
             }
-            setLoading(false);
         };
         fetchPost();
-    }, [briefId]);
+    }, [briefId, API_BASE]);
 
-    if (loading) return (
-        <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '60vh' }}>
-            <div style={{ color: 'var(--text-secondary)', fontSize: '1.1rem' }}>⏳ Loading post...</div>
-        </div>
-    );
-
+    if (loading) return <div style={{ padding: '4rem', textAlign: 'center' }}>Loading AI Content...</div>;
+    
     if (!post) return (
-        <div className="card" style={{ textAlign: 'center', padding: '3rem' }}>
-            <div style={{ fontSize: '3rem', marginBottom: '1rem' }}>🤖</div>
-            <h2>Post Still Generating...</h2>
-            <p style={{ color: 'var(--text-secondary)', marginTop: '0.5rem' }}>
-                The AI agents are working on it. Check back in a few moments!
-            </p>
-            <Link to="/" style={{ display: 'inline-block', marginTop: '1.5rem', color: 'var(--accent-blue)', textDecoration: 'none' }}>
-                ← Back to Dashboard
-            </Link>
+        <div style={{ padding: '4rem', textAlign: 'center' }}>
+            <h2>Post Not Published Yet</h2>
+            <p>Wait for Agent 02 to finish the writing process.</p>
+            <Link to="/" style={{ color: 'var(--accent-blue)', textDecoration: 'underline' }}>Return to Dashboard</Link>
         </div>
     );
 
     return (
-        <div style={{ maxWidth: '820px', margin: '0 auto' }}>
-            {/* Back button */}
-            <Link to="/analytics" style={{
-                display: 'inline-flex', alignItems: 'center', gap: '0.5rem',
-                color: 'var(--text-secondary)', marginBottom: '1.5rem',
-                textDecoration: 'none', fontSize: '0.9rem',
-                transition: 'color 0.2s'
-            }}
-                onMouseEnter={e => e.currentTarget.style.color = 'var(--text-primary)'}
-                onMouseLeave={e => e.currentTarget.style.color = 'var(--text-secondary)'}>
-                <ArrowLeft size={16} /> Back to Analytics
+        <div style={{ maxWidth: '900px', margin: '0 auto', paddingBottom: '5rem' }}>
+            <Link to="/" style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--text-secondary)', marginBottom: '2rem', fontSize: '0.9rem' }}>
+                <ChevronLeft size={16} /> Back to Dashboard
             </Link>
 
-            <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
-                {/* Hero image container */}
-                <div style={{ position: 'relative', height: '340px', background: 'var(--bg-dark)', overflow: 'hidden' }}>
-                    <img
-                        src={getFeaturedImage(post)}
-                        alt={post.title}
-                        style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
-                        onError={e => { e.target.parentElement.style.display = 'none'; }}
-                    />
-                    {/* Gradient overlay */}
-                    <div style={{
-                        position: 'absolute', inset: 0,
-                        background: 'linear-gradient(to bottom, transparent 40%, rgba(15,23,42,0.95) 100%)'
-                    }} />
-                    {/* Title over image */}
-                    <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, padding: '2rem' }}>
-                        <h1 style={{ fontSize: 'clamp(1.2rem, 4vw, 1.875rem)', fontWeight: 700, lineHeight: 1.2, marginBottom: '0.75rem' }}>
-                            {post.title}
-                        </h1>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', flexWrap: 'wrap' }}>
-                            <span className="badge published">SEO Score: {post.seo_score}%</span>
-                            <span style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
-                                <Calendar size={14} /> {new Date(post.created_at).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}
-                            </span>
-                            {post.live_url && post.live_url.startsWith('http') && (
-                                <a href={post.live_url} target="_blank" rel="noopener noreferrer"
-                                    style={{ color: 'var(--accent-blue)', fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '0.35rem', textDecoration: 'none' }}>
-                                    <ExternalLink size={14} /> View on WordPress
-                                </a>
-                            )}
-                        </div>
-                    </div>
+            <header style={{ marginBottom: '3rem' }}>
+                <div style={{ display: 'flex', gap: '10px', marginBottom: '1.5rem' }}>
+                    <span className="badge" style={{ background: 'var(--accent-purple)', color: 'white' }}>{post.category || 'General'}</span>
+                    <span className="badge progress">SEO Score: {post.seo_score}%</span>
                 </div>
+                
+                <h1 style={{ fontSize: '2.5rem', fontWeight: 800, lineHeight: 1.1, marginBottom: '1.5rem', letterSpacing: '-0.02em' }}>
+                    {post.title}
+                </h1>
 
-                {/* Post content */}
-                <div style={{ padding: '2rem 2.5rem' }}>
-                    <div
-                        className="post-body"
-                        dangerouslySetInnerHTML={{
-                            __html: (post.html_content || '')
-                                .replace(/<h1[^>]*>.*?<\/h1>/i, '')  // remove duplicate H1
-                                .replace(/<figure[\s\S]*?<\/figure>/i, '') // remove embedded image
-                        }}
-                    />
+                <div style={{ display: 'flex', alignItems: 'center', gap: '20px', color: 'var(--text-secondary)', fontSize: '0.9rem' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}><Calendar size={14}/> {new Date(post.created_at).toLocaleDateString()}</div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}><ShieldCheck size={14}/> Agent Verifed</div>
                 </div>
+            </header>
+
+            {/* Featured Image */}
+            <div className="card" style={{ padding: 0, overflow: 'hidden', marginBottom: '3rem', borderRadius: '16px' }}>
+                <img 
+                  src={post.featured_image_url} 
+                  alt={post.title} 
+                  style={{ width: '100%', maxHeight: '500px', objectFit: 'cover' }}
+                  onError={(e) => {
+                      const seed = post.title.toLowerCase().replace(/[^a-z]/g, '').substring(0, 10);
+                      e.target.src = `https://picsum.photos/seed/${seed}/1200/630`;
+                      e.target.onerror = null;
+                  }}
+                />
             </div>
+
+            {/* Article Content */}
+            <div 
+              className="article-content" 
+              style={{ fontSize: '1.1rem', lineHeight: 1.8, color: 'var(--text-primary)' }}
+              dangerouslySetInnerHTML={{ __html: post.html_content }}
+            />
+
+            {post.live_url && (
+                <div style={{ marginTop: '4rem', paddingTop: '2rem', borderTop: '1px solid var(--border-color)', textAlign: 'center' }}>
+                    <p style={{ color: 'var(--text-secondary)', marginBottom: '1rem' }}>This post is live on WordPress</p>
+                    <a 
+                      href={post.live_url} 
+                      target="_blank" 
+                      rel="noreferrer" 
+                      className="theme-toggle"
+                      style={{ width: 'auto', padding: '0 2rem', gap: '10px', borderRadius: '12px', background: 'var(--accent-blue)', color: 'white', border: 'none' }}
+                    >
+                        View Live Site <ExternalLink size={16} />
+                    </a>
+                </div>
+            )}
         </div>
     );
 };

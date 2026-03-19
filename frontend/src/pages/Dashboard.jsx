@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import { ExternalLink, Layers, CheckCircle, TrendingUp } from 'lucide-react';
 import axios from 'axios';
 
@@ -87,7 +88,16 @@ const Dashboard = () => {
                         {recentPosts.map((post, i) => (
                             <div key={post.id || i} className="card" style={{ padding: 0, overflow: 'hidden' }}>
                                 <div style={{ height: '140px', background: 'var(--bg-app)', position: 'relative' }}>
-                                    <img src={getFeaturedImage(post)} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                                    <img 
+                                        src={getFeaturedImage(post)} 
+                                        alt="" 
+                                        style={{ width: '100%', height: '100%', objectFit: 'cover' }} 
+                                        onError={(e) => {
+                                            const seed = post.title.toLowerCase().replace(/[^a-z]/g, '').substring(0, 10);
+                                            e.target.src = `https://picsum.photos/seed/${seed}/1200/630`;
+                                            e.target.onerror = null; // Prevent infinite loops
+                                        }}
+                                    />
                                     <span className="badge published" style={{ position: 'absolute', top: '10px', right: '10px' }}>
                                         SEO {post.seo_score}%
                                     </span>
@@ -96,11 +106,16 @@ const Dashboard = () => {
                                     <h3 style={{ fontSize: '0.9rem', fontWeight: 600, marginBottom: '0.5rem', lineHeight: 1.4 }}>{post.title}</h3>
                                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                                         <span style={{ fontSize: '0.7rem', color: 'var(--text-secondary)' }}>{post.category || 'General'}</span>
-                                        {post.live_url && (
-                                            <a href={post.live_url} target="_blank" rel="noreferrer" style={{ color: 'var(--accent-blue)' }}>
-                                                <ExternalLink size={14} />
-                                            </a>
-                                        )}
+                                        <div style={{ display: 'flex', gap: '10px' }}>
+                                            <Link to={`/preview/${post.brief_id || post.id}`} style={{ color: 'var(--accent-purple)' }} title="Preview locally">
+                                                <Layers size={14} />
+                                            </Link>
+                                            {post.live_url && (
+                                                <a href={post.live_url} target="_blank" rel="noreferrer" style={{ color: 'var(--accent-blue)' }} title="View on WordPress">
+                                                    <ExternalLink size={14} />
+                                                </a>
+                                            )}
+                                        </div>
                                     </div>
                                 </div>
                             </div>
