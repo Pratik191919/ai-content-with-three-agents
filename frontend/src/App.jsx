@@ -23,6 +23,17 @@ const NAV_ITEMS = [
 function AppLayout() {
   const [sidebarOpen, setSidebarOpen] = useState(window.innerWidth >= 768);
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
+  const [theme, setTheme] = useState(localStorage.getItem('theme') || 'dark');
+
+  // Handle system theme changes
+  useEffect(() => {
+    document.documentElement.setAttribute('data-theme', theme);
+    localStorage.setItem('theme', theme);
+  }, [theme]);
+
+  const toggleTheme = () => {
+    setTheme(prev => prev === 'dark' ? 'light' : 'dark');
+  };
 
   // Handle resize
   useEffect(() => {
@@ -39,6 +50,14 @@ function AppLayout() {
     if (isMobile) setSidebarOpen(false);
   };
 
+  const Sun = () => (
+    <svg width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/></svg>
+  );
+
+  const Moon = () => (
+    <svg width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></svg>
+  );
+
   return (
     <div className={`app-container ${sidebarOpen ? 'sidebar-open' : 'sidebar-closed'}`}>
 
@@ -51,16 +70,18 @@ function AppLayout() {
       <aside className={`sidebar ${sidebarOpen ? 'open' : 'collapsed'}`}>
         <div className="sidebar-header">
           <div className="logo">
-            <span className="logo-icon">⚡</span>
-            <span className="logo-text">Content Engine</span>
+            <span className="logo-icon">🚀</span>
+            <span className="logo-text">Content Agents</span>
           </div>
-          <button
-            className="sidebar-close-btn"
-            onClick={() => setSidebarOpen(false)}
-            title="Close sidebar"
-          >
-            <X size={18} />
-          </button>
+          {isMobile && (
+            <button
+              className="sidebar-close-btn"
+              onClick={() => setSidebarOpen(false)}
+              title="Close sidebar"
+            >
+              <X size={18} />
+            </button>
+          )}
         </div>
 
         <nav className="sidebar-nav">
@@ -79,7 +100,7 @@ function AppLayout() {
         </nav>
 
         <div className="sidebar-footer">
-          <div className="sidebar-footer-text">AI Content Agents v2.0</div>
+          <div className="sidebar-footer-text">v2.0 Premium Content Hub</div>
         </div>
       </aside>
 
@@ -94,12 +115,19 @@ function AppLayout() {
             >
               {sidebarOpen && !isMobile ? <ChevronLeft size={20} /> : <Menu size={20} />}
             </button>
-            <h2 className="topbar-title">OpenClaw Agents Supervisor</h2>
+            <h2 className="topbar-title">Pipeline Supervisor</h2>
           </div>
           <div className="topbar-right">
+            <button 
+              className="theme-toggle" 
+              onClick={toggleTheme}
+              title={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`}
+            >
+              {theme === 'dark' ? <Sun /> : <Moon />}
+            </button>
             <div className="status-badge">
               <span className="status-dot" />
-              <span className="status-text">Agents Active</span>
+              <span className="status-text">Agents Online</span>
             </div>
           </div>
         </header>

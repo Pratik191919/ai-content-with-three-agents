@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
-
-import { Eye, ExternalLink } from 'lucide-react';
+import { Eye, ExternalLink, Calendar, Search } from 'lucide-react';
 
 const Analytics = () => {
     const [posts, setPosts] = useState([]);
+    const [search, setSearch] = useState('');
 
     useEffect(() => {
         const fetchData = async () => {
@@ -21,54 +21,77 @@ const Analytics = () => {
         return () => clearInterval(interval);
     }, []);
 
+    const filtered = posts.filter(p => p.title.toLowerCase().includes(search.toLowerCase()));
+
     const getPreviewUrl = (url) => {
         if (!url) return '#';
-        // Ensure preview links point to the current frontend domain
         return url.replace('http://localhost:5173', window.location.origin);
     };
 
     return (
-        <div className="card">
-            <h2 style={{ marginBottom: '1rem', fontSize: '1.25rem' }}>Performance Analytics</h2>
-            <p style={{ color: 'var(--text-secondary)', marginBottom: '1.5rem' }}>GSC and ranking data retrieved by Agent 03 Content Auditor.</p>
+        <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
+            <header style={{ marginBottom: '2.5rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem' }}>
+                <div>
+                    <h1 style={{ fontSize: '2rem', fontWeight: 800, letterSpacing: '-0.03em' }}>Performance Analytics</h1>
+                    <p style={{ color: 'var(--text-secondary)' }}>Detailed auditing and GSC ranking data.</p>
+                </div>
+                <div style={{ position: 'relative', width: '300px' }}>
+                    <Search size={16} style={{ position: 'absolute', left: '12px', top: '12px', color: 'var(--text-secondary)' }} />
+                    <input 
+                      type="text" 
+                      placeholder="Search content..." 
+                      value={search}
+                      onChange={e => setSearch(e.target.value)}
+                      style={{ 
+                        width: '100%', 
+                        padding: '10px 10px 10px 40px', 
+                        borderRadius: '12px', 
+                        border: '1px solid var(--border-color)', 
+                        background: 'var(--bg-card)', 
+                        color: 'var(--text-primary)' 
+                      }} 
+                    />
+                </div>
+            </header>
 
-            <div className="table-container">
-                <table>
-                    <thead>
-                        <tr>
-                            <th>Post Title</th>
-                            <th>Category</th>
-                            <th>SEO Score</th>
-                            <th>Status</th>
-                            <th>Actions</th>
-                            <th>Published At</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {posts.map((p, i) => (
-                            <tr key={p.id || i}>
-                                <td style={{ fontWeight: 500 }}>{p.title}</td>
-                                <td>
-                                    <span className="badge" style={{ fontSize: '0.65rem' }}>{p.category || 'General'}</span>
-                                </td>
-                                <td style={{ color: 'var(--accent-blue)', fontWeight: 'bold' }}>{p.seo_score}%</td>
-                                <td>
-                                    <span className={`badge ${p.status.toLowerCase()}`}>{p.status}</span>
-                                </td>
-                                <td>
-                                    <div style={{ display: 'flex', gap: '0.5rem' }}>
+            <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
+                <div className="table-container">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Post Title</th>
+                                <th>Category</th>
+                                <th style={{ textAlign: 'center' }}>SEO Score</th>
+                                <th>Status</th>
+                                <th style={{ textAlign: 'center' }}>Action</th>
+                                <th>Published At</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {filtered.map((p, i) => (
+                                <tr key={p.id || i}>
+                                    <td style={{ fontWeight: 600, fontSize: '0.95rem' }}>{p.title}</td>
+                                    <td><span className="badge" style={{ background: 'rgba(59,130,246,0.1)', color: 'var(--accent-blue)' }}>{p.category || 'General'}</span></td>
+                                    <td style={{ textAlign: 'center' }}>
+                                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px' }}>
+                                            <span style={{ fontWeight: 800, color: 'var(--accent-blue)' }}>{p.seo_score}%</span>
+                                            <div style={{ width: '40px', height: '4px', background: 'rgba(0,0,0,0.05)', borderRadius: '2px' }}>
+                                                <div style={{ width: `${p.seo_score}%`, height: '100%', background: 'var(--accent-blue)', borderRadius: '2px' }} />
+                                            </div>
+                                        </div>
+                                    </td>
+                                    <td><span className={`badge ${p.status.toLowerCase()}`}>{p.status}</span></td>
+                                    <td style={{ textAlign: 'center' }}>
                                         <a 
                                             href={getPreviewUrl(p.live_url)} 
                                             target="_blank" 
                                             rel="noreferrer" 
                                             className="nav-item"
                                             style={{ 
-                                                padding: '0.4rem 0.8rem', 
+                                                padding: '0.4rem 1rem', 
                                                 fontSize: '0.75rem', 
-                                                background: 'rgba(59, 130, 246, 0.1)', 
+                                                border: '1px solid var(--accent-blue)', 
                                                 color: 'var(--accent-blue)',
-                                                border: '1px solid rgba(59, 130, 246, 0.2)',
-                                                textDecoration: 'none',
                                                 display: 'inline-flex',
                                                 alignItems: 'center',
                                                 gap: '0.4rem'
@@ -76,18 +99,15 @@ const Analytics = () => {
                                         >
                                             <Eye size={14} /> Preview
                                         </a>
-                                    </div>
-                                </td>
-                                <td style={{ color: 'var(--text-secondary)' }}>{new Date(p.created_at).toLocaleString()}</td>
-                            </tr>
-                        ))}
-                        {posts.length === 0 && (
-                            <tr>
-                                <td colSpan="6" style={{ textAlign: 'center', color: 'var(--text-secondary)' }}>No published posts found yet.</td>
-                            </tr>
-                        )}
-                    </tbody>
-                </table>
+                                    </td>
+                                    <td style={{ color: 'var(--text-secondary)', fontSize: '0.85rem' }}>
+                                        {new Date(p.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                                    </td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                </div>
             </div>
         </div>
     );

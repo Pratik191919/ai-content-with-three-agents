@@ -29,10 +29,10 @@ async function generateBlogPost(brief) {
             const prompt = `Write a totally unique, highly dynamic 500-800 word blog post for the topic: "${brief.title}".
 
 Rules:
-- Output ONLY article body HTML using these tags: <h2>, <h3>, <p>, <ul>, <li>, <strong>, <em>
-- Do NOT include: <style>, <script>, <head>, <html>, <body>, <!DOCTYPE>, or any CSS
-- Do NOT wrap output in markdown code blocks
-- Start directly with content (e.g. <p> or <h2>)
+- Output ONLY article body HTML using these tags: <h2>, <h3>, <p>, <ul>, <li>, <strong>, <em>, <img>
+- For <img> tags, use this format: <img src="IMAGE_PROMPT_HERE" alt="description" style="width:100%; border-radius:12px; margin: 24px 0;" />
+- Use "IMAGE_PROMPT_HERE" as a placeholder for a descriptive prompt (e.g. "futuristic-city-landscape").
+- Include at least 2-3 images throughout the post to break up the text.
 - Write original, insightful paragraphs with unique H2 and H3 headings for this specific topic`;
 
             const completion = await groq.chat.completions.create({
@@ -41,14 +41,21 @@ Rules:
                 temperature: 0.9
             });
 
-            htmlContent = completion.choices[0].message.content
-                .replace(/```html/gi, '').replace(/```/gi, '') // strip markdown fences
-                .replace(/<style[\s\S]*?<\/style>/gi, '')       // strip <style> blocks
-                .replace(/<script[\s\S]*?<\/script>/gi, '')     // strip <script> blocks
-                .replace(/<!DOCTYPE[^>]*>/gi, '')               // strip DOCTYPE
-                .replace(/<\/?html[^>]*>/gi, '')                // strip <html> tags
-                .replace(/<\/?head[^>]*>/gi, '')                // strip <head> tags
-                .replace(/<\/?body[^>]*>/gi, '')                // strip <body> tags
+            let rawHtml = completion.choices[0].message.content;
+
+            // Process inline images: Replace placeholders with real Pollinations URLs
+            htmlContent = rawHtml
+                .replace(/IMAGE_PROMPT_HERE/g, (match) => {
+                    const seed = Math.floor(Math.random() * 10000);
+                    return `https://image.pollinations.ai/prompt/${encodeURIComponent(brief.title + ' detail')}${seed}?width=800&height=450&nologo=true`;
+                })
+                .replace(/```html/gi, '').replace(/```/gi, '')
+                .replace(/<style[\s\S]*?<\/style>/gi, '')
+                .replace(/<script[\s\S]*?<\/script>/gi, '')
+                .replace(/<!DOCTYPE[^>]*>/gi, '')
+                .replace(/<\/?html[^>]*>/gi, '')
+                .replace(/<\/?head[^>]*>/gi, '')
+                .replace(/<\/?body[^>]*>/gi, '')
                 .trim();
             break;
         } catch (err) {
@@ -124,6 +131,8 @@ async function publishToCMS(postData, briefId) {
                 title: postData.title,
                 content: fullContent,
                 status: 'publish',
+                featured_image: postData.wp_image_url,
+                categories: postData.category || 'General',
                 tags: postData.category
                     ? [postData.category, 'AI Generated', '2026']
                     : ['AI Generated']

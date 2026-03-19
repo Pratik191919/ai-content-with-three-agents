@@ -1,27 +1,22 @@
 import React, { useState, useEffect } from 'react';
-import { Target, CheckCircle, TrendingUp, AlertCircle, ExternalLink } from 'lucide-react';
-import { Link } from 'react-router-dom';
+import { ExternalLink, Layers, CheckCircle, TrendingUp } from 'lucide-react';
 import axios from 'axios';
 
 const API_BASE = (import.meta.env.VITE_API_URL || 'http://localhost:8000') + '/api/content';
 
-const Dashboard = () => {
-    // Helper to get image or generate a fallback pollinations URL
     const getFeaturedImage = (post) => {
         if (post.featured_image_url && post.featured_image_url.startsWith('http') && !post.featured_image_url.includes('placeholder')) {
             return post.featured_image_url;
         }
-        // Generate a stable fallback based on title
-        const cleanTitle = post.title.replace(/[^a-zA-Z0-9\s]/g, '').trim().substring(0, 60);
-        const prompt = encodeURIComponent(`${cleanTitle}, digital art, high quality`);
-        return `https://image.pollinations.ai/prompt/${prompt}?width=1200&height=630&nologo=true&seed=${post.id || 123}`;
+        // Use a high-quality search-based fallback
+        const seed = post.title.toLowerCase().replace(/[^a-z]/g, '').substring(0, 10);
+        return `https://picsum.photos/seed/${seed}/1200/630`;
     };
 
     const [stats, setStats] = useState([
-        { title: 'Briefs Generated', value: '—', color: 'var(--accent-purple)' },
-        { title: 'Posts Published', value: '—', color: 'var(--accent-green)' },
-        { title: 'Avg SEO Score', value: '—', color: 'var(--accent-blue)' },
-        { title: 'Rewrite Queue', value: '—', color: 'var(--accent-red)' },
+        { title: 'Briefs', icon: Layers, value: '—', color: 'var(--accent-purple)' },
+        { title: 'Published', icon: CheckCircle, value: '—', color: 'var(--accent-green)' },
+        { title: 'SEO Avg', icon: TrendingUp, value: '—', color: 'var(--accent-blue)' },
     ]);
     const [recentPosts, setRecentPosts] = useState([]);
     const [recentBriefs, setRecentBriefs] = useState([]);
@@ -42,25 +37,17 @@ const Dashboard = () => {
                 const avgSeo = posts.length > 0
                     ? Math.round(posts.reduce((acc, p) => acc + (p.seo_score || 0), 0) / posts.length)
                     : 0;
-                const rewrites = perfs.filter(p => (p.score || 0) < 60).length;
 
                 setStats([
-                    { title: 'Briefs Generated', value: briefs.length, color: 'var(--accent-purple)' },
-                    { title: 'Posts Published', value: posts.length, color: 'var(--accent-green)' },
-                    { title: 'Avg SEO Score', value: `${avgSeo}%`, color: 'var(--accent-blue)' },
-                    { title: 'Rewrite Queue', value: rewrites, color: 'var(--accent-red)' },
+                    { title: 'Briefs Generated', icon: Layers, value: briefs.length, color: 'var(--accent-purple)' },
+                    { title: 'Posts Published', icon: CheckCircle, value: posts.length, color: 'var(--accent-green)' },
+                    { title: 'Avg SEO Score', icon: TrendingUp, value: `${avgSeo}%`, color: 'var(--accent-blue)' },
                 ]);
 
                 setRecentPosts(posts.slice(0, 6));
                 setRecentBriefs(briefs.slice(0, 4));
             } catch (err) {
                 console.error('Failed to fetch dashboard data:', err);
-                setStats([
-                    { title: 'Briefs Generated', value: 0, color: 'var(--accent-purple)' },
-                    { title: 'Posts Published', value: 0, color: 'var(--accent-green)' },
-                    { title: 'Avg SEO Score', value: '0%', color: 'var(--accent-blue)' },
-                    { title: 'Rewrite Queue', value: 0, color: 'var(--accent-red)' },
-                ]);
             }
         };
         fetchData();
@@ -69,138 +56,79 @@ const Dashboard = () => {
     }, []);
 
     return (
-        <div>
-            <h1 style={{ marginBottom: '1.75rem', fontSize: '1.6rem', fontWeight: 700 }}>
-                Overview Pipeline
-            </h1>
+        <div className="dashboard">
+            <header style={{ marginBottom: '2.5rem' }}>
+                <h1 style={{ fontSize: '2rem', fontWeight: 800, letterSpacing: '-0.03em' }}>Pipeline Overview</h1>
+                <p style={{ color: 'var(--text-secondary)' }}>Welcome back to your AI Content Hub.</p>
+            </header>
 
             {/* Stat Cards */}
-            <div className="grid-cards">
+            <div className="grid-cards" style={{ marginBottom: '2.5rem' }}>
                 {stats.map((s, i) => (
-                    <div key={i} className="card" style={{ borderTop: `3px solid ${s.color}` }}>
-                        <div className="stat-title">{s.title}</div>
-                        <div className="stat-value" style={{ color: s.color }}>{s.value}</div>
+                    <div key={i} className="card" style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <div className="stat-title">{s.title}</div>
+                            <s.icon size={18} style={{ color: s.color, opacity: 0.8 }} />
+                        </div>
+                        <div className="stat-value" style={{ color: 'var(--text-primary)' }}>{s.value}</div>
+                        <div style={{ width: '100%', height: '4px', background: 'rgba(0,0,0,0.05)', borderRadius: '2px', overflow: 'hidden', marginTop: '0.5rem' }}>
+                            <div style={{ width: '70%', height: '100%', background: s.color, borderRadius: '2px' }} />
+                        </div>
                     </div>
                 ))}
             </div>
 
-            {/* Published Posts Grid with Thumbnails */}
-            <div className="card" style={{ marginBottom: '1.75rem' }}>
-                <h2 style={{ marginBottom: '1.25rem', fontSize: '1.15rem' }}>
-                    🖼️ Recent Published Posts
-                </h2>
-
-                {recentPosts.length === 0 ? (
-                    <p style={{ color: 'var(--text-secondary)', textAlign: 'center', padding: '2rem 0' }}>
-                        No posts published yet. Backend agents will generate the first post shortly!
-                    </p>
-                ) : (
-                    <div style={{
-                        display: 'grid',
-                        gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))',
-                        gap: '1rem'
-                    }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1.6fr 1.2fr', gap: '2rem', flexWrap: 'wrap' }}>
+                {/* Published Posts Grid */}
+                <section>
+                    <h2 style={{ marginBottom: '1.25rem', fontSize: '1.1rem', fontWeight: 700 }}>🖼️ Recent Content</h2>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: '1.25rem' }}>
                         {recentPosts.map((post, i) => (
-                            <div key={post.id || i} style={{
-                                background: 'rgba(255,255,255,0.03)',
-                                borderRadius: '10px',
-                                border: '1px solid var(--border-color)',
-                                overflow: 'hidden',
-                                transition: 'transform 0.2s ease, box-shadow 0.2s ease'
-                            }}
-                                onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-3px)'; e.currentTarget.style.boxShadow = '0 8px 24px rgba(0,0,0,0.3)'; }}
-                                onMouseLeave={e => { e.currentTarget.style.transform = ''; e.currentTarget.style.boxShadow = ''; }}>
-                                {/* Thumbnail */}
-                                <div style={{ position: 'relative', height: '160px', background: 'var(--bg-card)', overflow: 'hidden' }}>
-                                    <img
-                                        src={getFeaturedImage(post)}
-                                        alt={post.title}
-                                        style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                                        onError={e => { e.target.style.display = 'none'; }}
-                                        loading="lazy"
-                                    />
-                                    {/* SEO badge */}
-                                    {post.seo_score && (
-                                        <span style={{
-                                            position: 'absolute', top: '8px', right: '8px',
-                                            background: 'rgba(16,185,129,0.9)', color: '#fff',
-                                            fontSize: '0.7rem', fontWeight: 700, padding: '2px 8px',
-                                            borderRadius: '9999px'
-                                        }}>
-                                            SEO {post.seo_score}%
-                                        </span>
-                                    )}
+                            <div key={post.id || i} className="card" style={{ padding: 0, overflow: 'hidden' }}>
+                                <div style={{ height: '140px', background: 'var(--bg-app)', position: 'relative' }}>
+                                    <img src={getFeaturedImage(post)} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                                    <span className="badge published" style={{ position: 'absolute', top: '10px', right: '10px' }}>
+                                        SEO {post.seo_score}%
+                                    </span>
                                 </div>
-
-                                {/* Card body */}
-                                <div style={{ padding: '0.875rem' }}>
-                                    <p style={{
-                                        fontWeight: 600, fontSize: '0.875rem', marginBottom: '0.5rem', lineHeight: '1.4',
-                                        display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden'
-                                    }}>
-                                        {post.title}
-                                    </p>
-                                    <div style={{ marginBottom: '0.75rem' }}>
-                                        <span className="badge" style={{ background: 'rgba(255,255,255,0.05)', color: 'var(--text-secondary)', fontSize: '0.65rem' }}>
-                                            {post.category || 'General'}
-                                        </span>
-                                    </div>
-                                    <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
-                                        {post.live_url && post.live_url.startsWith('http') && (
-                                            <a href={post.live_url} target="_blank" rel="noopener noreferrer"
-                                                style={{ fontSize: '0.75rem', color: 'var(--accent-blue)', display: 'flex', alignItems: 'center', gap: '0.25rem', textDecoration: 'none' }}>
-                                                <ExternalLink size={12} /> Live Post
+                                <div style={{ padding: '1rem' }}>
+                                    <h3 style={{ fontSize: '0.9rem', fontWeight: 600, marginBottom: '0.5rem', lineHeight: 1.4 }}>{post.title}</h3>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                        <span style={{ fontSize: '0.7rem', color: 'var(--text-secondary)' }}>{post.category || 'General'}</span>
+                                        {post.live_url && (
+                                            <a href={post.live_url} target="_blank" rel="noreferrer" style={{ color: 'var(--accent-blue)' }}>
+                                                <ExternalLink size={14} />
                                             </a>
                                         )}
-                                        <span style={{ fontSize: '0.7rem', color: 'var(--text-secondary)', marginLeft: 'auto' }}>
-                                            {new Date(post.created_at).toLocaleDateString()}
-                                        </span>
                                     </div>
                                 </div>
                             </div>
                         ))}
                     </div>
-                )}
-            </div>
+                </section>
 
-            {/* Recent Briefs Table */}
-            <div className="card">
-                <h2 style={{ marginBottom: '1rem', fontSize: '1.15rem' }}>📋 Recent Briefs</h2>
-                <div className="table-container">
-                    <table>
-                        <thead>
-                            <tr>
-                                <th>Title</th>
-                                <th>Category</th>
-                                <th>Keyword</th>
-                                <th>Status</th>
-                                <th>Date</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {recentBriefs.map((b, i) => (
-                                <tr key={b.id || i}>
-                                    <td style={{ fontWeight: 500 }}>{b.title}</td>
-                                    <td>
-                                        <span className="badge" style={{ fontSize: '0.65rem' }}>{b.category || 'General'}</span>
-                                    </td>
-                                    <td style={{ color: 'var(--text-secondary)' }}>{b.target_keyword}</td>
-                                    <td>
-                                        <span className={`badge ${(b.status || '').toLowerCase()}`}>{b.status}</span>
-                                    </td>
-                                    <td style={{ color: 'var(--text-secondary)' }}>{new Date(b.created_at).toLocaleDateString()}</td>
-                                </tr>
-                            ))}
-                            {recentBriefs.length === 0 && (
+                {/* Recent Briefs Table */}
+                <section>
+                    <h2 style={{ marginBottom: '1.25rem', fontSize: '1.1rem', fontWeight: 700 }}>📋 Briefs Queue</h2>
+                    <div className="table-container">
+                        <table>
+                            <thead>
                                 <tr>
-                                    <td colSpan="5" style={{ textAlign: 'center', color: 'var(--text-secondary)' }}>
-                                        No briefs found. Agents will generate soon!
-                                    </td>
+                                    <th>Title</th>
+                                    <th>Status</th>
                                 </tr>
-                            )}
-                        </tbody>
-                    </table>
-                </div>
+                            </thead>
+                            <tbody>
+                                {recentBriefs.map((b, i) => (
+                                    <tr key={b.id || i}>
+                                        <td style={{ fontSize: '0.85rem', fontWeight: 500 }}>{b.title}</td>
+                                        <td><span className={`badge ${b.status.toLowerCase()}`}>{b.status}</span></td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+                </section>
             </div>
         </div>
     );
