@@ -36,16 +36,16 @@ async function generateBlogPost(brief) {
     console.log(`Agent 02: Generating blog post with Groq AI (Llama 3.3) for: ${brief.title}...`);
     if (!groq) throw new Error('GROQ_API_KEY is missing.');
 
-    let htmlContent;
+    let finalHtml;
     let attempts = 0;
     while (attempts < 5) {
         try {
             const prompt = `Write a totally unique, highly dynamic 500-800 word blog post for the topic: "${brief.title}".
-
+            
 Rules:
 - Output ONLY article body HTML using these tags: <h2>, <h3>, <p>, <ul>, <li>, <strong>, <em>, <img>
-- For <img> tags, use this format: <img src="IMAGE_PROMPT_HERE" alt="description" style="width:100%; border-radius:12px; margin: 24px 0;" />
-- Use "IMAGE_PROMPT_HERE" as a placeholder for a descriptive prompt (e.g. "futuristic-city-landscape").
+- For <img> tags, use this format: <img src="https://image.pollinations.ai/prompt/DESCRIPTIVE_PROMPT?width=800&height=450&nologo=true" alt="description" style="width:100%; border-radius:12px; margin: 24px 0;" />
+- Replace "DESCRIPTIVE_PROMPT" with a specific prompt related to the section (e.g. "futuristic-smartwatch-on-wrist").
 - Include at least 2-3 images throughout the post to break up the text.
 - Write original, insightful paragraphs with unique H2 and H3 headings for this specific topic`;
 
@@ -55,13 +55,14 @@ Rules:
                 temperature: 0.9
             });
 
-            let rawHtml = completion.choices[0].message.content;
+            const rawHtml = completion.choices[0].message.content;
 
-            // Process inline images: Replace placeholders with real Pollinations URLs
-            htmlContent = rawHtml
-                .replace(/IMAGE_PROMPT_HERE/g, (match) => {
-                    const seed = Math.floor(Math.random() * 10000);
-                    return `https://image.pollinations.ai/prompt/${encodeURIComponent(brief.title + ' detail')}${seed}?width=800&height=450&nologo=true`;
+            // Sanitize and fix image URLs (URL encode prompts + add randomness)
+            finalHtml = rawHtml
+                .replace(/https:\/\/image\.pollinations\.ai\/prompt\/([^?"]+)/g, (match, p1) => {
+                    const encodedPrompt = encodeURIComponent(p1.trim().replace(/['"]+/g, ''));
+                    const seed = Math.floor(Math.random() * 100000);
+                    return `https://image.pollinations.ai/prompt/${encodedPrompt}?width=800&height=450&nologo=true&seed=${seed}`;
                 })
                 .replace(/```html/gi, '').replace(/```/gi, '')
                 .replace(/<style[\s\S]*?<\/style>/gi, '')
@@ -71,22 +72,20 @@ Rules:
                 .replace(/<\/?head[^>]*>/gi, '')
                 .replace(/<\/?body[^>]*>/gi, '')
                 .trim();
-            break;
+            
+            if (finalHtml) break;
         } catch (err) {
             attempts++;
             console.warn(`Agent 02: Groq API busy. Retry ${attempts}/5...`);
             await new Promise(res => setTimeout(res, 5000));
-            if (attempts >= 5) throw new Error('Groq AI failed to generate content after 5 retries.');
         }
     }
 
     const seoScore = Math.floor(Math.random() * (100 - 75 + 1) + 75);
-    return { htmlContent, seoScore };
+    return { htmlContent: finalHtml, seoScore };
 }
 
 function generateFeaturedImage(title, category) {
-    // --- For the React frontend (Supabase) ---
-    // Pollinations.ai: AI-generated, works great in browser via direct URL
     const categoryStyles = {
         'Technology & AI':       'futuristic digital technology, glowing circuits, blue neon',
         'Food & Recipes':        'delicious food photography, vibrant colors, natural lighting',
@@ -103,8 +102,6 @@ function generateFeaturedImage(title, category) {
     const seed = Date.now() % 99999;
     const pollinationsUrl = `https://image.pollinations.ai/prompt/${prompt}?width=1200&height=630&nologo=true&seed=${seed}`;
 
-    // --- For WordPress.com embed ---
-    // picsum.photos: real photos, seed-based (consistent per title), allowed by WP security
     const picsumSeed = cleanTitle.toLowerCase().replace(/\s+/g, '-').substring(0, 40);
     const wpImageUrl = `https://picsum.photos/seed/${picsumSeed}/1200/630`;
 
@@ -121,8 +118,27 @@ async function publishToCMS(postData, briefId) {
 
     console.log(`Agent 02: Publishing '${postData.title}' [${postData.category || 'General'}] to WordPress.com...`);
 
-    // Use wpImageUrl in WordPress content (picsum.photos — allowed by WP security)
-    // Use pollinationsUrl stored in Supabase (for React frontend display)
+    let featuredMediaId = null;
+
+    if (postData.wp_image_url) {
+        try {
+            console.log('Agent 02: Uploading image to WordPress Media Library...');
+            const mediaEndpoint = `https://public-api.wordpress.com/rest/v1.1/sites/${WP_COM_SITE}/media/new`;
+            const mediaRes = await fetch(mediaEndpoint, {
+                method: 'POST',
+                headers: { 'Authorization': `Bearer ${WP_COM_TOKEN}`, 'Content-Type': 'application/json' },
+                body: JSON.stringify({ media_urls: [postData.wp_image_url] })
+            });
+            const mediaData = await mediaRes.json();
+            if (mediaData.media && mediaData.media.length > 0) {
+                featuredMediaId = mediaData.media[0].ID;
+                console.log(`Agent 02: ✅ Image uploaded! Media ID: ${featuredMediaId}`);
+            }
+        } catch (err) {
+            console.error('Agent 02: Media upload failed, falling back to basic publish:', err.message);
+        }
+    }
+
     const imageHtml = postData.wp_image_url
         ? `<figure class="wp-block-image size-large" style="margin:0 0 2em 0;">
     <img src="${postData.wp_image_url}" alt="${postData.title}" style="width:100%;height:auto;border-radius:8px;display:block;" />
@@ -145,7 +161,7 @@ async function publishToCMS(postData, briefId) {
                 title: postData.title,
                 content: fullContent,
                 status: 'publish',
-                featured_image: postData.wp_image_url,
+                featured_image: featuredMediaId || postData.wp_image_url,
                 categories: postData.category || 'General',
                 tags: postData.category
                     ? [postData.category, 'AI Generated', '2026']
@@ -184,17 +200,14 @@ async function processBrief(briefId) {
         }
 
         const brief = briefData[0];
-
-        // ADDED SAFETY CHECK: Prevent multiple agents from writing the same blog post
         if (brief.status !== 'PENDING') {
-            console.log(`Agent 02: Brief ${briefId} is already processing or published by another worker. Skipping...`);
+            console.log(`Agent 02: Brief ${briefId} is already processing or published. Skipping...`);
             return;
         }
 
         await supabase.from('content_briefs').update({ status: 'IN_PROGRESS' }).eq('id', briefId);
 
         const { htmlContent, seoScore } = await generateBlogPost(brief);
-
         const { pollinationsUrl, wpImageUrl } = generateFeaturedImage(brief.title, brief.category);
         
         await logActivity('Writer (Agent 02)', 'INFO', `Started content generation for: ${brief.title}`);
@@ -241,7 +254,7 @@ async function processBrief(briefId) {
                 await publishClient.disconnect();
                 console.log(`Agent 02: Blog post ${postId} published & event emitted!`);
             } else {
-                console.log(`Agent 02: Blog post ${postId} published (Redis unavailable — no event emitted)`);
+                console.log(`Agent 02: Blog post ${postId} published (Redis unavailable)`);
             }
         }
     } catch (err) {
@@ -252,13 +265,12 @@ async function processBrief(briefId) {
 async function listenForEvents() {
     console.log('Agent 02 - Blog Writer listening for events...');
     if (!isValidRedisUrl(REDIS_URL)) {
-        console.warn('Agent 02: Redis disabled — REDIS_URL invalid. Will poll Supabase directly instead.');
+        console.warn('Agent 02: Redis disabled. Auditor will poll instead.');
         return;
     }
     try {
         redisClient = redis.createClient({ url: REDIS_URL });
         await redisClient.connect();
-
         await redisClient.subscribe('content_events', (message) => {
             try {
                 const data = JSON.parse(message);
@@ -266,7 +278,7 @@ async function listenForEvents() {
                     processBrief(data.brief_id);
                 }
             } catch (err) {
-                console.error('Agent 02: Mismatch event data parsing', err);
+                console.error('Agent 02: Error parsing event', err);
             }
         });
     } catch (err) {

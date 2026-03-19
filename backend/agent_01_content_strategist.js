@@ -11,13 +11,11 @@ const GROQ_API_KEY = process.env.GROQ_API_KEY;
 
 const supabase = (SUPABASE_URL && SUPABASE_KEY && SUPABASE_URL.startsWith('http'))
     ? createClient(SUPABASE_URL, SUPABASE_KEY)
-    : { from: () => ({ select: () => ({ eq: () => ({}) }), insert: () => ({ select: () => ({}) }), update: () => ({ eq: () => ({}) }) }) };
+    : { from: () => ({ select: () => ({ eq: () => ({}), order: () => ({ limit: () => ({}) }) }), insert: () => ({ select: () => ({}) }), update: () => ({ eq: () => ({}) }) }) };
 
-// Guard: only create Redis client if URL is valid (redis:// or rediss://)
 const redisClient = isValidRedisUrl(REDIS_URL)
     ? redis.createClient({ url: REDIS_URL })
     : null;
-if (!redisClient) console.warn('Agent 01: Redis disabled — REDIS_URL is missing or invalid. Events will be skipped.');
 
 const groq = GROQ_API_KEY ? new Groq({ apiKey: GROQ_API_KEY }) : null;
 
@@ -35,7 +33,6 @@ async function logActivity(agentName, eventType, message, metadata = {}) {
     }
 }
 
-// 8 rotating categories — each cycle picks a different one
 const BLOG_CATEGORIES = [
     'Technology & AI',
     'Food & Recipes',
@@ -47,136 +44,85 @@ const BLOG_CATEGORIES = [
     'CMS & Web Development'
 ];
 
-let lastCategoryIndex = -1;
-
-function pickNextCategory() {
-    // Rotate to next category, skip same as last
-    let idx;
-    do {
-        idx = Math.floor(Math.random() * BLOG_CATEGORIES.length);
-    } while (idx === lastCategoryIndex && BLOG_CATEGORIES.length > 1);
-    lastCategoryIndex = idx;
-    return BLOG_CATEGORIES[idx];
-}
-
 async function scanTrends() {
     console.log(`Agent 01: Requesting unique trends from Groq AI...`);
-    if (!groq) throw new Error('GROQ_API_KEY is missing. Add it to your .env file.');
+    if (!groq) throw new Error('GROQ_API_KEY is missing.');
 
-    const seed = Date.now();
-    let attempts = 0;
-    while (attempts < 5) {
-        try {
-            const prompt = `You are a content strategist. Generate 1 hot, trending blog topic for 2026.
-Seed: ${seed}
+    // Step 1: Fetch last 10 titles to avoid repetition
+    let lastTitles = [];
+    try {
+        const { data } = await supabase.from('content_briefs').select('title, category').order('created_at', { ascending: false }).limit(10);
+        lastTitles = data ? data.map(d => d.title) : [];
+        const lastCategory = (data && data.length > 0) ? data[0].category : null;
+        
+        // Pick a category different from the last one
+        const availableCategories = BLOG_CATEGORIES.filter(c => c !== lastCategory);
+        const targetCategory = availableCategories[Math.floor(Math.random() * availableCategories.length)];
+        
+        const prompt = `You are a high-level content strategist. Generate 1 UNIQUE, trending blog topic for 2026.
+        
+CRITICAL RULES:
+- DO NOT use the word "Revolutionizing".
+- DO NOT use the word "Wellness" unless extremely relevant.
+- Avoid generic clickbait. Use styles like "Case Study", "The Rise of...", "Why [Topic] is changing [Industry]", or "Deep Dive:".
+- The category MUST be: "${targetCategory}".
+- Ensure the topic is DIFFERENT from these recent titles: ${JSON.stringify(lastTitles)}.
 
-Choose the BEST category for this topic from this list:
-[${BLOG_CATEGORIES.join(', ')}]
+Return ONLY a valid JSON object.
+Format: {"topic": "...", "category": "${targetCategory}", "trend_score": 92}`;
 
-Return ONLY a valid JSON array with exactly 1 object.
-Format: [{"topic": "...", "category": "...", "trend_score": 87}]
+        const completion = await groq.chat.completions.create({
+            model: 'llama-3.3-70b-versatile',
+            messages: [{ role: 'user', content: prompt }],
+            temperature: 0.9
+        });
 
-Rules:
-- topic must be a specific, catchy blog title.
-- category MUST be one from the provided list.
-- trend_score must be 60-100.`;
-
-            const completion = await groq.chat.completions.create({
-                model: 'llama-3.3-70b-versatile',
-                messages: [{ role: 'user', content: prompt }],
-                temperature: 0.9
-            });
-
-            const text = completion.choices[0].message.content;
-            const cleaned = text.replace(/```json/gi, '').replace(/```/gi, '').trim();
-            const parsed = JSON.parse(cleaned);
-            return Array.isArray(parsed) ? parsed : [parsed];
-        } catch (e) {
-            attempts++;
-            await new Promise(res => setTimeout(res, 5000));
-        }
+        const text = completion.choices[0].message.content;
+        const cleaned = text.replace(/```json/gi, '').replace(/```/gi, '').trim();
+        const parsed = JSON.parse(cleaned);
+        return Array.isArray(parsed) ? parsed : [parsed];
+    } catch (e) {
+        console.error('Trend scan failed:', e.message);
+        return [{ topic: `Future of ${BLOG_CATEGORIES[0]} in 2026`, category: BLOG_CATEGORIES[0], trend_score: 80 }];
     }
-}
-
-async function deduplicateTrends(trends) {
-    console.log('Agent 01: Deduplicating trends using mock approach...');
-    return trends;
-}
-
-async function generateBrief(topicData) {
-    const category = topicData.category || 'Technology & AI';
-    console.log(`Agent 01: Generating brief for [${category}] → ${topicData.topic}...`);
-    return {
-        title: topicData.topic,  // use AI-generated title directly (already catchy & unique)
-        target_keyword: topicData.topic.toLowerCase().split(' ').slice(0, 4).join(' '),
-        secondary_keywords: [category.toLowerCase(), '2026', 'guide'],
-        outline: 'H2 Introduction\nH2 Key Insights\nH2 Practical Tips\nH2 Future Outlook\nH2 Conclusion',
-        angle: `Trending ${category} perspective for 2026`,
-        word_count_target: 800,
-        trend_score: topicData.trend_score,
-        category: category
-    };
 }
 
 async function processTask() {
     try {
         const rawTrends = await scanTrends();
-        const uniqueTrends = await deduplicateTrends(rawTrends);
-
-        for (const trend of uniqueTrends) {
-            const brief = await generateBrief(trend);
-
+        for (const trend of rawTrends) {
             const { data, error } = await supabase.from('content_briefs').insert({
-                title: brief.title,
-                target_keyword: brief.target_keyword,
-                secondary_keywords: brief.secondary_keywords,
-                outline: brief.outline,
-                angle: brief.angle,
+                title: trend.topic,
+                target_keyword: trend.topic.toLowerCase().split(' ').slice(0, 4).join(' '),
                 status: 'PENDING',
-                category: brief.category,
-                word_count_target: brief.word_count_target,
-                trend_score: brief.trend_score
+                category: trend.category,
+                trend_score: trend.trend_score,
+                outline: 'H2 Introduction\nH2 Key Insights\nH2 Future Outlook\nH2 Conclusion'
             }).select();
 
-            if (error) {
-                console.error('Error inserting brief:', error.message);
-                continue;
-            }
-
-            if (data && data.length > 0) {
+            if (!error && data && data.length > 0) {
                 const briefId = data[0].id;
-                const eventData = {
-                    event: 'content_briefs_ready',
-                    brief_id: briefId
-                };
-
-                await redisClient.publish('content_events', JSON.stringify(eventData));
-                console.log(`Agent 01: Brief saved & event 'content_briefs_ready' published for brief ID ${briefId}`);
-                await logActivity('Strategist (Agent 01)', 'SUCCESS', `Generated brief for trend: ${brief.title}`, { brief_id: briefId });
+                console.log(`Agent 01: Unique brief created for category [${trend.category}]!`);
+                await logActivity('Strategist (Agent 01)', 'SUCCESS', `Generated unique trend: ${trend.topic}`, { brief_id: briefId });
+                
+                if (redisClient) {
+                    await redisClient.publish('content_events', JSON.stringify({ event: 'content_briefs_ready', brief_id: briefId }));
+                }
             }
         }
     } catch (error) {
-        console.error('Unexpected error during task execution:', error);
-        await logActivity('Strategist (Agent 01)', 'ERROR', `Task execution failed`, { error: error.message });
+        console.error('Task execution failed:', error);
     }
 }
 
 async function runAgent01() {
     console.log('Starting Agent 01 - Content Strategist (Daemon Mode)');
+    if (redisClient) await redisClient.connect();
     
-    try {
-        await redisClient.connect();
-        
-        while (true) {
-            await processTask();
-            console.log('Agent 01: Task complete. Sleeping for 4 hours to fetch next trend...');
-            await new Promise(resolve => setTimeout(resolve, 4 * 60 * 60 * 1000));
-        }
-    } catch (error) {
-        console.error('Daemon crashed:', error);
-    } finally {
-        console.log('Disconnecting from Redis...');
-        try { await redisClient.disconnect(); } catch (e) {}
+    while (true) {
+        await processTask();
+        console.log('Agent 01: Sequence complete. Sleeping 4 hours...');
+        await new Promise(resolve => setTimeout(resolve, 4 * 60 * 60 * 1000));
     }
 }
 
