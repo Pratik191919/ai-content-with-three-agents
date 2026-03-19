@@ -75,56 +75,75 @@ Rules:
 }
 
 async function publishToCMS(postData, briefId) {
-    if (!WP_COM_TOKEN) return `${process.env.FRONTEND_URL || 'http://localhost:5173'}/preview/${briefId}`;
-
-    console.log(`Agent 02: Publishing '${postData.title}' to WordPress.com (with Physical Media Upload)...`);
-    let featuredMediaId = null;
-
-    if (postData.wp_image_url) {
-        try {
-            console.log('Agent 02: Downloading AI Image for physical upload...');
-            const imageRes = await axios.get(postData.wp_image_url, { responseType: 'arraybuffer' });
-            
-            const form = new FormData();
-            form.append('media[]', Buffer.from(imageRes.data), {
-                filename: 'featured-image.jpg',
-                contentType: 'image/jpeg',
-            });
-
-            console.log('Agent 02: Uploading physical file to WordPress...');
-            const uploadRes = await axios.post(`https://public-api.wordpress.com/rest/v1.1/sites/${WP_COM_SITE}/media/new`, form, {
-                headers: {
-                    ...form.getHeaders(),
-                    'Authorization': `Bearer ${WP_COM_TOKEN}`
-                }
-            });
-
-            if (uploadRes.data.media?.[0]?.ID) {
-                featuredMediaId = uploadRes.data.media[0].ID;
-                console.log(`Agent 02: ✅ Media Uploaded Successfully! ID: ${featuredMediaId}`);
-            }
-        } catch (err) {
-            console.error('Agent 02: Media upload failed (falling back to URL):', err.message);
-        }
+    if (!WP_COM_TOKEN || !WP_COM_SITE) {
+        console.warn('Agent 02: WordPress.com credentials missing. Falling back to local preview.');
+        return `${process.env.FRONTEND_URL || 'http://localhost:5173'}/preview/${briefId}`;
     }
-
-    // --- Image Generation Fallback ---
-    let featuredImageUrl = postData.wp_image_url;
-    if (!featuredImageUrl) {
-        console.log(`Agent 02: ⚠️ No image URL found in brief. Generating fallback image for title: ${postData.title}`);
-        const fallbackPrompt = encodeURIComponent(`Professional high-resolution featured image for a blog titled "${postData.title}", cinematic lighting, 8k, digital art style`);
-        featuredImageUrl = `https://pollinations.ai/p/${fallbackPrompt}?width=1024&height=768&seed=${Math.floor(Math.random() * 1000000)}&nologo=true`;
-    }
-
-    // Wrap in Official WordPress Gutenberg Image Blocks for better theme recognition
-    const imageHtml = `<!-- wp:image {"align":"center","sizeSlug":"large","linkDestination":"none"} -->
-<figure class="wp-block-image aligncenter size-large"><img src="${featuredImageUrl}" alt="${postData.title}" class="wp-image-auto"/></figure>
-<!-- /wp:image -->`;
 
     try {
-        const response = await axios.post(`https://public-api.wordpress.com/rest/v1.1/sites/${WP_COM_SITE}/posts/new`, {
+        console.log(`Agent 02: 📸 Generating 4 unique AI images for: ${postData.title}`);
+        
+        // Define 4 distinct image prompts as per architecture
+        const prompts = [
+            `Professional 8k cinematic featured cover image for ${postData.title}, futuristic digital art`,
+            `Intricate conceptual illustration for ${postData.title}, high resolution, scientific style`,
+            `Futuristic visualization for ${postData.title}, vivid colors, masterpiece`,
+            `Modern infographic-style digital art for ${postData.title}, clean design, 8k`
+        ];
+
+        const uploadedMedia = [];
+
+        // Step 1: Upload 4 physical images to WordPress Media API
+        for (let i = 0; i < prompts.length; i++) {
+            const seed = Math.floor(Math.random() * 1000000);
+            const imageUrl = `https://pollinations.ai/p/${encodeURIComponent(prompts[i])}?width=1024&height=768&seed=${seed}&nologo=true`;
+            
+            try {
+                const imageRes = await axios.get(imageUrl, { responseType: 'arraybuffer' });
+                const form = new FormData();
+                form.append('media[]', Buffer.from(imageRes.data), {
+                    filename: `image-${i}-${Date.now()}.jpg`,
+                    contentType: 'image/jpeg',
+                });
+
+                const uploadRes = await axios.post(`https://public-api.wordpress.com/rest/v1.1/sites/${WP_COM_SITE}/media/new`, form, {
+                    headers: {
+                        ...form.getHeaders(),
+                        'Authorization': `Bearer ${WP_COM_TOKEN}`
+                    }
+                });
+
+                if (uploadRes.data.media?.[0]?.ID) {
+                    const media = uploadRes.data.media[0];
+                    uploadedMedia.push({ id: media.ID, url: media.URL });
+                    console.log(`Agent 02: ✅ Image ${i+1}/4 Uploaded Successfully! ID: ${media.ID}`);
+                }
+            } catch (err) {
+                console.error(`Agent 02: ❌ Failed to upload image ${i+1}:`, err.message);
+            }
+        }
+
+        // Step 2: Embed Images into Content (Gutenberg Format with ID Linking)
+        let finalContent = postData.html_content || '';
+        if (uploadedMedia.length >= 4) {
+            const paragraphs = finalContent.split('</p>');
+            const partSize = Math.floor(paragraphs.length / 4);
+            
+            if (partSize > 1) {
+                // Insert 3 internal images with official WordPress IDs
+                paragraphs.splice(partSize, 0, `\n<!-- wp:image {"id":${uploadedMedia[1].id},"sizeSlug":"large","linkDestination":"none"} -->\n<figure class="wp-block-image size-large"><img src="${uploadedMedia[1].url}" alt="Concept" class="wp-image-${uploadedMedia[1].id}"/></figure>\n<!-- /wp:image -->\n`);
+                paragraphs.splice(partSize * 2 + 1, 0, `\n<!-- wp:image {"id":${uploadedMedia[2].id},"sizeSlug":"large","linkDestination":"none"} -->\n<figure class="wp-block-image size-large"><img src="${uploadedMedia[2].url}" alt="Visualization" class="wp-image-${uploadedMedia[2].id}"/></figure>\n<!-- /wp:image -->\n`);
+                paragraphs.splice(partSize * 3 + 2, 0, `\n<!-- wp:image {"id":${uploadedMedia[3].id},"sizeSlug":"large","linkDestination":"none"} -->\n<figure class="wp-block-image size-large"><img src="${uploadedMedia[3].url}" alt="Infographic" class="wp-image-${uploadedMedia[3].id}"/></figure>\n<!-- /wp:image -->\n`);
+                finalContent = paragraphs.join('</p>');
+            }
+        }
+
+        // Step 3: Publish to Post API with Featured Media ID
+        const featuredMediaId = uploadedMedia.length > 0 ? uploadedMedia[0].id : null;
+        
+        const response = await axios.post(`https://public-api.wordpress.com/wp/v2/sites/${WP_COM_SITE}/posts`, {
             title: postData.title,
-            content: imageHtml + (postData.html_content || ''),
+            content: finalContent,
             status: 'publish',
             featured_media: featuredMediaId,
             categories: postData.category || 'General',
@@ -134,11 +153,11 @@ async function publishToCMS(postData, briefId) {
         });
 
         if (response.data.ID) {
-            console.log(`Agent 02: ✅ Published! URL: ${response.data.URL}`);
+            console.log(`Agent 02: 🚀 MEGA BLOG PUBLISHED: ${response.data.URL}`);
             return response.data.URL;
         }
     } catch (err) {
-        console.error('Agent 02: WordPress publish failed:', err.response?.data || err.message);
+        console.error('Agent 02: WordPress mega-publish failed:', err.response?.data || err.message);
     }
     return `${process.env.FRONTEND_URL || 'http://localhost:5173'}/preview/${briefId}`;
 }
