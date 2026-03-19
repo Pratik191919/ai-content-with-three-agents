@@ -117,7 +117,7 @@ async function publishToCMS(postData, briefId) {
             title: postData.title,
             content: imageHtml + (postData.html_content || ''),
             status: 'publish',
-            featured_image: featuredMediaId || postData.wp_image_url,
+            featured_media: featuredMediaId,
             categories: postData.category || 'General',
             tags: [postData.category || 'Global', 'AI Hub', '2026']
         }, {
