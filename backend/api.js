@@ -85,7 +85,7 @@ io.on('connection', (socket) => {
     console.log('Client connected to Vision Board');
 });
 
-server.listen(PORT, async () => {
+server.listen(PORT, '0.0.0.0', async () => {
     console.log(`✅ API & WebSocket server running on port ${PORT}`);
     
     // Redis Subscriber for Realtime WebSocket Events
