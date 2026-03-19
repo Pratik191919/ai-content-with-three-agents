@@ -10,8 +10,8 @@ const Dashboard = () => {
         if (post.featured_image_url && post.featured_image_url.startsWith('http') && !post.featured_image_url.includes('placeholder')) {
             return post.featured_image_url;
         }
-        // Use a high-quality search-based fallback
-        const seed = post.title.toLowerCase().replace(/[^a-z]/g, '').substring(0, 10);
+        // Use a high-quality unique seed based on post ID and title
+        const seed = (post.id || post.title).toString().substring(0, 20);
         return `https://picsum.photos/seed/${seed}/1200/630`;
     };
 
@@ -93,9 +93,9 @@ const Dashboard = () => {
                                         alt="" 
                                         style={{ width: '100%', height: '100%', objectFit: 'cover' }} 
                                         onError={(e) => {
-                                            const seed = post.title.toLowerCase().replace(/[^a-z]/g, '').substring(0, 10);
+                                            const seed = (post.id || post.title).toString().substring(0, 20);
                                             e.target.src = `https://picsum.photos/seed/${seed}/1200/630`;
-                                            e.target.onerror = null; // Prevent infinite loops
+                                            e.target.onerror = null;
                                         }}
                                     />
                                     <span className="badge published" style={{ position: 'absolute', top: '10px', right: '10px' }}>
