@@ -184,12 +184,12 @@ async function publishToCMS(postData, briefId) {
 
         if (response.data.ID) {
             console.log(`Agent 02: 🚀 MEGA BLOG PUBLISHED: ${response.data.URL}`);
-            return response.data.URL;
+            return { url: response.data.URL, media: uploadedMedia };
         }
     } catch (err) {
         console.error('Agent 02: WordPress mega-publish failed:', err.response?.data || err.message);
     }
-    return `${process.env.FRONTEND_URL || 'http://localhost:5173'}/preview/${briefId}`;
+    return { url: `${process.env.FRONTEND_URL || 'http://localhost:5173'}/preview/${briefId}`, media: [] };
 }
 
 async function processBrief(briefId) {
@@ -207,14 +207,19 @@ async function processBrief(briefId) {
         
         const finalImageUrl = brief.featured_image_url || `https://picsum.photos/seed/${briefId}/1200/630`;
 
-        const liveUrl = await publishToCMS({
+        const liveResult = await publishToCMS({
             title: brief.title,
             html_content: htmlContent,
             category: brief.category,
             wp_image_url: finalImageUrl
         }, briefId);
-
-        await logActivity('Writer (Agent 02)', 'SUCCESS', `Published article with featured image: ${brief.title}`, { url: liveUrl });
+        
+        const { url: liveUrl, media: uploadedMedia } = liveResult;
+        
+        await logActivity('Writer (Agent 02)', 'SUCCESS', `Published article: ${brief.title}`, { 
+            url: liveUrl,
+            images: uploadedMedia
+        });
 
         await supabase.from('content').insert({
             brief_id: briefId,
@@ -223,7 +228,7 @@ async function processBrief(briefId) {
             html_content: htmlContent,
             seo_score: seoScore,
             live_url: liveUrl,
-            featured_image_url: finalImageUrl,
+            featured_image_url: uploadedMedia?.[0]?.url || finalImageUrl,
             status: 'PUBLISHED'
         });
 
