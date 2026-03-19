@@ -74,18 +74,22 @@ Rules:
     return { htmlContent: finalHtml, seoScore: Math.floor(Math.random() * 25 + 75) };
 }
 
-const Replicate = require('replicate');
-const replicate = new Replicate({ auth: process.env.REPLICATE_API_TOKEN });
+const WP_URL = process.env.WP_URL || 'https://ai-content.lovestoblog.com';
+const WP_USERNAME = process.env.WP_USERNAME || 'admin';
+const WP_APP_PASSWORD = process.env.WP_APP_PASSWORD;
 
 /**
- * Official WordPress Media Sideloading and Publishing
- * Handles 1 Featured Image + 3 Content Images using Stable Diffusion (Replicate)
+ * Professional WordPress V2 Media Sideloading and Publishing
+ * Handles 1 Featured Image + 3 Content Images via Application Password
  */
 async function publishToCMS(postData, briefId) {
-    if (!WP_COM_TOKEN || !WP_COM_SITE || !process.env.REPLICATE_API_TOKEN) {
+    if (!WP_URL || !WP_APP_PASSWORD || !process.env.REPLICATE_API_TOKEN) {
         console.warn('Agent 02: Missing Credentials. Falling back to local preview.');
         return `${process.env.FRONTEND_URL || 'http://localhost:5173'}/preview/${briefId}`;
     }
+
+    const auth = Buffer.from(`${WP_USERNAME}:${WP_APP_PASSWORD}`).toString('base64');
+    const authHeaders = { 'Authorization': `Basic ${auth}` };
 
     try {
         console.log(`Agent 02: 📸 Generating 4 High-End Stable Diffusion images for: ${postData.title}`);
@@ -100,12 +104,11 @@ async function publishToCMS(postData, briefId) {
 
         const uploadedMedia = [];
 
-        // Upload 4 physical images to WordPress Media Library
+        // Upload 4 physical images to WordPress Media Library via v2 API
         for (let i = 0; i < prompts.length; i++) {
             try {
                 process.stdout.write(`Agent 02: 🤖 Generating Image ${i+1}/4 via Replicate... `);
                 
-                // Call Replicate (Stable Diffusion XL)
                 const output = await replicate.run(
                     "stability-ai/sdxl:7762fd07cf27411a72d45b46e3968600d8ce20dcf16d47b0a3f6517173e35195",
                     {
@@ -120,34 +123,30 @@ async function publishToCMS(postData, briefId) {
                 );
 
                 const imageUrl = output[0];
-                console.log(`Success! URL: ${imageUrl}`);
+                console.log(`Success!`);
 
-                // Download the generated image bytes
+                // Download image and upload to v2/media
                 const imageRes = await axios.get(imageUrl, { responseType: 'arraybuffer' });
-                
-                const form = new FormData();
-                form.append('media[]', Buffer.from(imageRes.data), {
-                    filename: `sdxl-${i}-${Date.now()}.jpg`,
-                    contentType: 'image/jpeg',
-                });
+                const fileName = `sdxl-${i}-${Date.now()}.jpg`;
 
-                // Post to WordPress Media API
-                const uploadRes = await axios.post(`https://public-api.wordpress.com/rest/v1.1/sites/${WP_COM_SITE}/media/new`, form, {
+                console.log(`Agent 02: ⬆️ Uploading ${fileName} to V2 Media API...`);
+                const uploadRes = await axios.post(`${WP_URL}/wp-json/wp/v2/media`, imageRes.data, {
                     headers: {
-                        ...form.getHeaders(),
-                        'Authorization': `Bearer ${WP_COM_TOKEN}`
+                        ...authHeaders,
+                        'Content-Disposition': `attachment; filename="${fileName}"`,
+                        'Content-Type': 'image/jpeg'
                     }
                 });
 
-                if (uploadRes.data.media?.[0]?.ID) {
+                if (uploadRes.data && uploadRes.data.id) {
                     uploadedMedia.push({ 
-                        id: uploadRes.data.media[0].ID, 
-                        url: uploadRes.data.media[0].URL 
+                        id: uploadRes.data.id, 
+                        url: uploadRes.data.source_url 
                     });
-                    console.log(`Agent 02: ✅ Sideloaded to Media Library (ID: ${uploadRes.data.media[0].ID})`);
+                    console.log(`Agent 02: ✅ Sideloaded to Media Library (ID: ${uploadRes.data.id})`);
                 }
             } catch (err) {
-                console.error(`\nAgent 02: ❌ Failed Image ${i+1}:`, err.message);
+                console.error(`\nAgent 02: ❌ Failed Image ${i+1}:`, err.response?.data || err.message);
             }
         }
 
@@ -168,26 +167,28 @@ async function publishToCMS(postData, briefId) {
             }
         }
 
-        // Step 3: Publish to Post API with Featured Media ID
+        // Step 3: Publish to Post API with Featured Media ID via v2
         const featuredMediaId = uploadedMedia.length > 0 ? uploadedMedia[0].id : null;
         
-        const response = await axios.post(`https://public-api.wordpress.com/wp/v2/sites/${WP_COM_SITE}/posts`, {
+        console.log(`Agent 02: 📝 Creating final post on ${WP_URL}...`);
+        const response = await axios.post(`${WP_URL}/wp-json/wp/v2/posts`, {
             title: postData.title,
             content: finalContent,
             status: 'publish',
             featured_media: featuredMediaId,
-            categories: postData.category || 'General',
+            categories: postData.category || 1, // 'General' is usually ID 1
             tags: [postData.category || 'Global', 'AI Hub', '2026']
         }, {
-            headers: { 'Authorization': `Bearer ${WP_COM_TOKEN}` }
+            headers: authHeaders
         });
 
-        if (response.data.ID) {
-            console.log(`Agent 02: 🚀 MEGA BLOG PUBLISHED: ${response.data.URL}`);
-            return { url: response.data.URL, media: uploadedMedia };
+        if (response.data && response.data.id) {
+            const liveUrl = response.data.link || response.data.guid?.rendered;
+            console.log(`Agent 02: 🚀 MEGA BLOG PUBLISHED: ${liveUrl}`);
+            return { url: liveUrl, media: uploadedMedia };
         }
     } catch (err) {
-        console.error('Agent 02: WordPress mega-publish failed:', err.response?.data || err.message);
+        console.error('Agent 02: WordPress V2 mega-publish failed:', err.response?.data || err.message);
     }
     return { url: `${process.env.FRONTEND_URL || 'http://localhost:5173'}/preview/${briefId}`, media: [] };
 }
