@@ -74,64 +74,97 @@ Rules:
     return { htmlContent: finalHtml, seoScore: Math.floor(Math.random() * 25 + 75) };
 }
 
-const WP_COM_SITE = process.env.WP_COM_SITE || 'myaiagentblog09.wordpress.com';
-const WP_COM_TOKEN = process.env.WP_COM_TOKEN ? decodeURIComponent(process.env.WP_COM_TOKEN) : null;
+
+const { GoogleGenerativeAI } = require('@google/generative-ai');
 
 /**
- * Professional WordPress Media Sideloading and Publishing
- * Handles 1 Featured Image + 3 Content Images via WordPress.com API
+ * Professional Freepik AI Media Sideloading and Publishing
+ * Handles 1 Featured Image + inline Content Images via WordPress.com API
  */
+let dailyFreepikCount = 0; // Simple memory counter for free tier limit
+
 async function publishToCMS(postData, briefId) {
-    if (!WP_COM_TOKEN || !WP_COM_SITE || !process.env.REPLICATE_API_TOKEN) {
-        console.warn('Agent 02: Missing Credentials. Falling back to local preview.');
+    if (!WP_COM_TOKEN || !WP_COM_SITE || !process.env.FREEPIK_API_KEY) {
+        console.warn('Agent 02: Missing Credentials (WP or Freepik). Falling back to local preview.');
         return `${process.env.FRONTEND_URL || 'http://localhost:5173'}/preview/${briefId}`;
     }
 
     try {
-        console.log(`Agent 02: 📸 Generating 4 High-End Stable Diffusion images for: ${postData.title}`);
+        console.log(`Agent 02: 📸 Managing Freepik AI Image process for: ${postData.title}`);
         
-        // Define 4 professional cinematic prompts
-        const prompts = [
-            `${postData.title}, professional modern AI blog cover thumbnail, cinematic lighting, 8k resolution, clean design`,
-            `${postData.title}, futuristic conceptual visualization, intricate digital art, mastery, high detail`,
-            `${postData.title}, abstract technology concept, glowing elements, future aesthetics, vivid colors`,
-            `${postData.title}, digital infographic visualization art, artistic and clean, professional masterpiece`
-        ];
+        let prompts = [];
+        
+        // Respect Freepik 100/day free limit (1 blog = 3 images)
+        if (dailyFreepikCount > 90) {
+            console.warn("Agent 02: ⚠️ Approaching Freepik daily limit! Skipping image generation for this post.");
+        } else {
+            // Step 1: Generate Smart Prompts using Gemini
+            if (process.env.GEMINI_API_KEY) {
+                try {
+                    const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+                    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+                    const prompt = `Generate exactly 3 image prompts for this blog:
+Title: ${postData.title}
+Make them visual, modern, and blog-friendly. Return ONLY a valid JSON array of 3 strings. No markdown formatting or extra text.`;
+                    
+                    const result = await model.generateContent(prompt);
+                    const responseText = result.response.text();
+                    
+                    const jsonMatch = responseText.match(/\[.*\]/s);
+                    if (jsonMatch) prompts = JSON.parse(jsonMatch[0]);
+                } catch(e) {
+                    console.warn('Agent 02: Gemini prompt generation failed, using fallback.', e.message);
+                }
+            }
+            
+            // Fallback prompts if Gemini fails
+            if (prompts.length < 3) {
+                 prompts = [
+                    `${postData.title}, modern business UI illustration, high quality`,
+                    `${postData.title}, professional business strategy concept, futuristic`,
+                    `${postData.title}, digital marketing analytics futuristic concept`
+                ];
+            }
+        }
 
         const uploadedMedia = [];
 
-        // Upload 4 physical images to WordPress Media Library
+        // Step 2 & 3: Generate and Upload 3 images to WordPress Media Library
         for (let i = 0; i < prompts.length; i++) {
             try {
-                process.stdout.write(`Agent 02: 🤖 Generating Image ${i+1}/4 via Replicate... `);
+                process.stdout.write(`Agent 02: 🤖 Generating Image ${i+1}/3 via Freepik... `);
                 
-                const output = await replicate.run(
-                    "stability-ai/sdxl:7762fd07cf27411a72d45b46e3968600d8ce20dcf16d47b0a3f6517173e35195",
-                    {
-                        input: {
-                            prompt: prompts[i],
-                            width: 1024,
-                            height: 1024,
-                            refiner: "expert_ensemble_refiner",
-                            apply_watermark: false
-                        }
+                const freepikRes = await axios.post('https://api.freepik.com/v1/ai/text-to-image', {
+                    prompt: prompts[i]
+                }, {
+                    headers: {
+                        'x-freepik-api-key': process.env.FREEPIK_API_KEY,
+                        'Content-Type': 'application/json',
+                        'Accept': 'application/json'
                     }
-                );
+                });
 
-                const imageUrl = output[0];
+                dailyFreepikCount++; // Increment limit counter
+
+                let imageBuffer;
+                const base64Data = freepikRes.data?.data?.[0]?.base64;
+                if (base64Data) {
+                    imageBuffer = Buffer.from(base64Data, 'base64');
+                } else if (freepikRes.data?.data?.[0]?.url) {
+                    const imgRes = await axios.get(freepikRes.data.data[0].url, { responseType: 'arraybuffer' });
+                    imageBuffer = Buffer.from(imgRes.data);
+                } else {
+                    throw new Error('Invalid Freepik response format');
+                }
                 console.log(`Success!`);
 
-                // Download image 
-                const imageRes = await axios.get(imageUrl, { responseType: 'arraybuffer' });
-                
                 const form = new FormData();
-                form.append('media[]', Buffer.from(imageRes.data), {
-                    filename: `sdxl-${i}-${Date.now()}.jpg`,
+                form.append('media[]', imageBuffer, {
+                    filename: `freepik-${i}-${Date.now()}.jpg`,
                     contentType: 'image/jpeg',
                 });
 
                 console.log(`Agent 02: ⬆️ Uploading to WordPress.com Media API...`);
-                // Upload physically to WordPress.com
                 const uploadRes = await axios.post(`https://public-api.wordpress.com/rest/v1.1/sites/${WP_COM_SITE}/media/new`, form, {
                     headers: {
                         ...form.getHeaders(),
@@ -139,7 +172,6 @@ async function publishToCMS(postData, briefId) {
                     }
                 });
 
-                // Detect URL and ID
                 const mediaItem = uploadRes.data.media?.[0];
                 if (mediaItem && mediaItem.ID) {
                     const finalUrl = mediaItem.URL || mediaItem.url || mediaItem.source_url || mediaItem.guid;
@@ -154,22 +186,23 @@ async function publishToCMS(postData, briefId) {
             }
         }
 
-        // Step 2: Embed Images into Content (Gutenberg Format with ID Linking)
+        // Step 4 & 5: Insert Images seamlessly into Content for Perfect Previews
         let finalContent = postData.html_content || '';
-        if (uploadedMedia.length >= 4) {
+        
+        if (uploadedMedia.length >= 3) {
             const paragraphs = finalContent.split('</p>');
             const partSize = Math.floor(paragraphs.length / 4);
             
             if (partSize > 1) {
-                // Insert 3 internal images with official WordPress IDs
-                paragraphs.splice(partSize, 0, `\n<!-- wp:image {"id":${uploadedMedia[1].id},"sizeSlug":"large","linkDestination":"none"} -->\n<figure class="wp-block-image size-large"><img src="${uploadedMedia[1].url}" alt="Concept" class="wp-image-${uploadedMedia[1].id}"/></figure>\n<!-- /wp:image -->\n`);
-                paragraphs.splice(partSize * 2 + 1, 0, `\n<!-- wp:image {"id":${uploadedMedia[2].id},"sizeSlug":"large","linkDestination":"none"} -->\n<figure class="wp-block-image size-large"><img src="${uploadedMedia[2].url}" alt="Visualization" class="wp-image-${uploadedMedia[2].id}"/></figure>\n<!-- /wp:image -->\n`);
-                paragraphs.splice(partSize * 3 + 2, 0, `\n<!-- wp:image {"id":${uploadedMedia[3].id},"sizeSlug":"large","linkDestination":"none"} -->\n<figure class="wp-block-image size-large"><img src="${uploadedMedia[3].url}" alt="Infographic" class="wp-image-${uploadedMedia[3].id}"/></figure>\n<!-- /wp:image -->\n`);
+                // Strategic Image Placement using standard <img> tags
+                paragraphs.splice(partSize, 0, `\n<img src="${uploadedMedia[0].url}" alt="${postData.title} concept" />\n`);
+                paragraphs.splice(partSize * 2 + 1, 0, `\n<img src="${uploadedMedia[1].url}" alt="${postData.title} visualization" />\n`);
+                paragraphs.splice(partSize * 3 + 2, 0, `\n<img src="${uploadedMedia[2].url}" alt="${postData.title} analytics" />\n`);
                 finalContent = paragraphs.join('</p>');
             }
         }
 
-        // Step 3: Publish to Post API
+        // Step 6: Publish Post (Featured Image is the 1st generated image)
         const featuredMediaId = uploadedMedia.length > 0 ? uploadedMedia[0].id : null;
         
         console.log(`Agent 02: 📝 Creating final post on ${WP_COM_SITE}...`);
@@ -177,8 +210,8 @@ async function publishToCMS(postData, briefId) {
             title: postData.title,
             content: finalContent,
             status: 'publish',
-            featured_media: featuredMediaId, // WordPress.com v1.1 also accepts featured_media or featured_image in some cases, but wait!
-            featured_image: featuredMediaId, // Include both just in case! 
+            featured_media: featuredMediaId, 
+            featured_image: featuredMediaId, // Dual-keying for failsafe API support
             categories: postData.category || 'General', 
             tags: [postData.category || 'Global', 'AI Hub', '2026']
         }, {
