@@ -183,13 +183,15 @@ Make them visual, modern, and blog-friendly. Return ONLY a valid JSON array of 3
         
         if (uploadedMedia.length >= 3) {
             const paragraphs = finalContent.split('</p>');
-            const partSize = Math.floor(paragraphs.length / 4);
+            const partSize = Math.floor(paragraphs.length / 3);
             
             if (partSize > 1) {
-                // Strategic Image Placement using standard <img> tags
-                paragraphs.splice(partSize, 0, `\n<img src="${uploadedMedia[0].url}" alt="${postData.title} concept" />\n`);
-                paragraphs.splice(partSize * 2 + 1, 0, `\n<img src="${uploadedMedia[1].url}" alt="${postData.title} visualization" />\n`);
-                paragraphs.splice(partSize * 3 + 2, 0, `\n<img src="${uploadedMedia[2].url}" alt="${postData.title} analytics" />\n`);
+                // Strategic Image Placement using standard styled <img> tags
+                // We SKIP uploadedMedia[0] because it's already the Featured Image at the top of the blog!
+                const imgStyle = 'style="width: 100%; height: auto; border-radius: 12px; margin: 32px 0; box-shadow: 0 4px 12px rgba(0,0,0,0.1);"';
+                
+                paragraphs.splice(partSize, 0, `\n<img src="${uploadedMedia[1].url}" alt="${postData.title} visualization" ${imgStyle} />\n`);
+                paragraphs.splice(partSize * 2 + 1, 0, `\n<img src="${uploadedMedia[2].url}" alt="${postData.title} analytics" ${imgStyle} />\n`);
                 finalContent = paragraphs.join('</p>');
             }
         }
@@ -258,6 +260,8 @@ async function processBrief(briefId) {
             seo_score: seoScore,
             live_url: liveUrl,
             featured_image_url: uploadedMedia?.[0]?.url || finalImageUrl,
+            content_image_1: uploadedMedia?.[1]?.url || null, // Storing middle image
+            content_image_2: uploadedMedia?.[2]?.url || null, // Storing secondary image
             status: 'PUBLISHED'
         });
 
