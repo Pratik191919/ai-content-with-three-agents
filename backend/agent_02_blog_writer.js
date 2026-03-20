@@ -270,8 +270,9 @@ async function processBrief(briefId) {
             seo_score: seoScore,
             live_url: liveUrl,
             featured_image_url: uploadedMedia?.[0]?.url || finalImageUrl,
-            content_image_1: uploadedMedia?.[1]?.url || null, // Storing middle image
-            content_image_2: uploadedMedia?.[2]?.url || null, // Storing secondary image
+            content_image: uploadedMedia?.[1]?.url || null,   // Specific requested field (guaranteed different from featured)
+            content_image_1: uploadedMedia?.[1]?.url || null, // Fallback/duplicate logic
+            content_image_2: uploadedMedia?.[2]?.url || null, // Third image
             status: 'PUBLISHED'
         });
 
