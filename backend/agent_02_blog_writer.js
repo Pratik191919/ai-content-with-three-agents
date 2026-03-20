@@ -44,10 +44,8 @@ async function generateBlogPost(brief) {
             const prompt = `Write a totally unique, highly dynamic 500-800 word blog post for the topic: "${brief.title}".
             
 Rules:
-- Output ONLY article body HTML using these tags: <h2>, <h3>, <p>, <ul>, <li>, <strong>, <em>, <img>
-- For <img> tags, use this format: <img src="https://image.pollinations.ai/prompt/DESCRIPTIVE_PROMPT?width=800&height=450&nologo=true" alt="description" style="width:100%; border-radius:12px; margin: 24px 0;" />
-- Replace "DESCRIPTIVE_PROMPT" with a specific prompt (e.g. "futuristic-smartwatch-on-table").
-- Include 2-3 images. Don't use same prompt for images.
+- Output ONLY article body HTML using these tags: <h2>, <h3>, <p>, <ul>, <li>, <strong>, <em>
+- DO NOT INCLUDE ANY <img> TAGS. Image generation is handled automatically by the Freepik system.
 - Write original, insightful paragraphs with unique H2 and H3 headings for this specific topic`;
 
             const completion = await groq.chat.completions.create({
@@ -57,13 +55,7 @@ Rules:
             });
 
             const rawHtml = completion.choices[0].message.content;
-            finalHtml = rawHtml
-                .replace(/https:\/\/image\.pollinations\.ai\/prompt\/([^?"]+)/g, (match, p1) => {
-                    const encodedPrompt = encodeURIComponent(p1.trim().replace(/['"]+/g, ''));
-                    const seed = Math.floor(Math.random() * 100000);
-                    return `https://image.pollinations.ai/prompt/${encodedPrompt}?width=800&height=450&nologo=true&seed=${seed}`;
-                })
-                .replace(/```html/gi, '').replace(/```/gi, '').trim();
+            finalHtml = rawHtml.replace(/```html/gi, '').replace(/```/gi, '').trim();
             
             if (finalHtml) break;
         } catch (err) {

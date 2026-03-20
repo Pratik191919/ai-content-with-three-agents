@@ -101,7 +101,7 @@ async function processTask() {
                 status: 'PENDING',
                 category: trend.category,
                 trend_score: trend.trend_score,
-                featured_image_url: `https://image.pollinations.ai/prompt/${encodeURIComponent(trend.image_prompt)}?width=1200&height=630&nologo=true&seed=${Math.floor(Math.random() * 99999)}`,
+                featured_image_url: null,
                 outline: 'H2 Introduction\nH2 Key Insights\nH2 Future Outlook\nH2 Conclusion'
             }).select();
 
