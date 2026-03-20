@@ -132,7 +132,8 @@ Make them visual, modern, and blog-friendly. Return ONLY a valid JSON array of 3
                     headers: {
                         'x-freepik-api-key': process.env.FREEPIK_API_KEY,
                         'Content-Type': 'application/json',
-                        'Accept': 'application/json'
+                        'Accept': 'application/json',
+                        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
                     }
                 });
 
@@ -160,7 +161,8 @@ Make them visual, modern, and blog-friendly. Return ONLY a valid JSON array of 3
                 const uploadRes = await axios.post(`https://public-api.wordpress.com/rest/v1.1/sites/${WP_COM_SITE}/media/new`, form, {
                     headers: {
                         ...form.getHeaders(),
-                        'Authorization': `Bearer ${WP_COM_TOKEN}`
+                        'Authorization': `Bearer ${WP_COM_TOKEN}`,
+                        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
                     }
                 });
 
@@ -174,7 +176,19 @@ Make them visual, modern, and blog-friendly. Return ONLY a valid JSON array of 3
                     console.log(`Agent 02: ✅ Sideloaded to Media Library (ID: ${mediaItem.ID})`);
                 }
             } catch (err) {
-                console.error(`\nAgent 02: ❌ Failed Image ${i+1}:`, err.response?.data || err.message);
+                const errMsg = err.response?.data ? JSON.stringify(err.response.data) : err.message;
+                console.error(`\nAgent 02: ❌ Failed Image ${i+1}:`, errMsg);
+                
+                // Extremely valuable debug logging directly to Supabase since Cloud console is hidden
+                try {
+                    const { createClient } = require('@supabase/supabase-js');
+                    const debugDb = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_KEY);
+                    await debugDb.from('agent_logs').insert({
+                        agent_name: 'Writer (Agent 02)',
+                        event_type: 'ERROR',
+                        message: `Render Cloud Image Generation Failed (Image ${i+1}): ${errMsg.substring(0, 150)}`
+                    });
+                } catch(e) {}
             }
             // Smart Delay to avoid Freepik Free-Tier Rate Limits (429)
             if (i < prompts.length - 1) {
