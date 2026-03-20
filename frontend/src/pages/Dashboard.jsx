@@ -101,6 +101,22 @@ const Dashboard = () => {
                                         SEO {post.seo_score}%
                                     </span>
                                 </div>
+                                {/* Freepik Rendered Content Images Gallery Strip */}
+                                <div style={{ display: 'flex', gap: '4px', background: 'var(--bg-card)', padding: '4px 8px 0 8px' }}>
+                                    {[post.content_image, post.content_image_1, post.content_image_2]
+                                        .filter(img => img != null) // Only show successfully generated internal images
+                                        .filter((img, index, self) => self.indexOf(img) === index) // Remove exact duplicates
+                                        .slice(0, 3) 
+                                        .map((imgUrl, idx) => (
+                                            <div key={idx} style={{ 
+                                                flex: 1, height: '40px', borderRadius: '4px', overflow: 'hidden', 
+                                                border: '1px solid var(--border-color)' 
+                                            }}>
+                                                <img src={imgUrl} alt="Content visual" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                                            </div>
+                                        ))
+                                    }
+                                </div>
                                 <div style={{ padding: '1rem' }}>
                                     <h3 style={{ fontSize: '0.9rem', fontWeight: 600, marginBottom: '0.5rem', lineHeight: 1.4 }}>{post.title}</h3>
                                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>

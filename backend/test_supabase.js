@@ -5,12 +5,13 @@ const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_KEY
 
 async function checkRows() {
     const { data, error } = await supabase
-        .from('content')
-        .select(`title, live_url, featured_image_url, content_image, created_at`)
+        .from('agent_logs')
+        .select(`agent_name, event_type, message, created_at`)
+        .eq('event_type', 'ERROR')
         .order('created_at', { ascending: false })
-        .limit(3);
+        .limit(10);
         
-    console.log("Recent Content Rows:", JSON.stringify(data, null, 2));
+    console.log("Recent ERROR Logs:", JSON.stringify(data, null, 2));
     if (error) console.error("Error:", error);
 }
 

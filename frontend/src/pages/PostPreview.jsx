@@ -71,6 +71,20 @@ const PostPreview = () => {
                 />
             </div>
 
+            {/* Gallery of Extra Content Images */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px', marginBottom: '3rem' }}>
+                {[post.content_image, post.content_image_1, post.content_image_2]
+                    .filter(img => img != null)
+                    .filter((img, index, self) => self.indexOf(img) === index)
+                    .slice(0, 2)
+                    .map((imgUrl, i) => (
+                        <div key={i} style={{ borderRadius: '12px', overflow: 'hidden', border: '1px solid var(--border-color)' }}>
+                            <img src={imgUrl} alt="Content preview" style={{ width: '100%', height: '200px', objectFit: 'cover' }} />
+                        </div>
+                    ))
+                }
+            </div>
+
             {/* Article Content */}
             <div 
               className="article-content" 

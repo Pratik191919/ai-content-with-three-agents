@@ -50,7 +50,7 @@ app.get('/api/content/posts', async (req, res) => {
     if (!requireSupabase(res)) return;
     const { data, error } = await supabase
         .from('content')
-        .select('id, brief_id, title, status, category, seo_score, live_url, created_at, featured_image_url')
+        .select('id, brief_id, title, status, category, seo_score, live_url, created_at, featured_image_url, content_image, content_image_1, content_image_2, html_content')
         .order('created_at', { ascending: false });
     if (error) return res.status(500).json({ error: error.message });
     res.json(data);
