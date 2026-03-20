@@ -176,22 +176,32 @@ Make them visual, modern, and blog-friendly. Return ONLY a valid JSON array of 3
             } catch (err) {
                 console.error(`\nAgent 02: ❌ Failed Image ${i+1}:`, err.response?.data || err.message);
             }
+            // Smart Delay to avoid Freepik Free-Tier Rate Limits (429)
+            if (i < prompts.length - 1) {
+                await new Promise(r => setTimeout(r, 4000)); 
+            }
         }
 
         // Step 4 & 5: Insert Images seamlessly into Content for Perfect Previews
         let finalContent = postData.html_content || '';
         
-        if (uploadedMedia.length >= 3) {
+        // Dynamically inject gracefully based on however many images *succeeded*
+        if (uploadedMedia.length > 1) {
             const paragraphs = finalContent.split('</p>');
-            const partSize = Math.floor(paragraphs.length / 3);
+            const partSize = Math.floor(paragraphs.length / uploadedMedia.length);
             
             if (partSize > 1) {
-                // Strategic Image Placement using standard styled <img> tags
-                // We SKIP uploadedMedia[0] because it's already the Featured Image at the top of the blog!
                 const imgStyle = 'style="width: 100%; height: auto; border-radius: 12px; margin: 32px 0; box-shadow: 0 4px 12px rgba(0,0,0,0.1);"';
                 
-                paragraphs.splice(partSize, 0, `\n<img src="${uploadedMedia[1].url}" alt="${postData.title} visualization" ${imgStyle} />\n`);
-                paragraphs.splice(partSize * 2 + 1, 0, `\n<img src="${uploadedMedia[2].url}" alt="${postData.title} analytics" ${imgStyle} />\n`);
+                // Start from 1 because index 0 is used for the Featured Image Header
+                let inserted = 0;
+                for (let j = 1; j < uploadedMedia.length; j++) {
+                    const targetIndex = (partSize * j) + inserted;
+                    if (targetIndex < paragraphs.length) {
+                        paragraphs.splice(targetIndex, 0, `\n<img src="${uploadedMedia[j].url}" alt="${postData.title} concept visual" ${imgStyle} />\n`);
+                        inserted++;
+                    }
+                }
                 finalContent = paragraphs.join('</p>');
             }
         }
