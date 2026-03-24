@@ -11,8 +11,8 @@ const runProcess = (scriptName) => {
     
     child.on('exit', (code) => {
         console.log(`${scriptName} exited with code ${code}`);
-        if (scriptName === 'api.js' && code !== 0) {
-            console.error('Critical process api.js failed. Restarting...');
+        if (code !== 0) {
+            console.error(`Critical process ${scriptName} failed. Restarting...`);
             setTimeout(() => runProcess(scriptName), 5000);
         }
     });

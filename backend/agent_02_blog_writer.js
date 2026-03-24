@@ -294,6 +294,7 @@ async function processBrief(briefId) {
 
         if (isValidRedisUrl(REDIS_URL)) {
             const publishClient = redis.createClient({ url: REDIS_URL });
+            publishClient.on('error', err => console.error('Agent 02 Publish Error:', err.message));
             await publishClient.connect();
             await publishClient.publish('content_events', JSON.stringify({ event: 'post_published', post_id: briefId, live_url: liveUrl }));
             await publishClient.disconnect();
@@ -308,6 +309,7 @@ async function listenForEvents() {
     if (!isValidRedisUrl(REDIS_URL)) return;
     try {
         const subClient = redis.createClient({ url: REDIS_URL });
+        subClient.on('error', err => console.error('Agent 02 Redis Listener Error:', err.message));
         await subClient.connect();
         await subClient.subscribe('content_events', (message) => {
             const data = JSON.parse(message);
@@ -318,4 +320,24 @@ async function listenForEvents() {
     }
 }
 
-listenForEvents();
+async function runAgent02() {
+    listenForEvents();
+
+    // Fallback polling for missed Redis events
+    while (true) {
+        try {
+            const { data } = await supabase.from('content_briefs').select('id').eq('status', 'PENDING');
+            if (data && data.length > 0) {
+                console.log(`Agent 02: Found ${data.length} PENDING briefs via fallback poll. Processing...`);
+                for (const brief of data) {
+                    await processBrief(brief.id);
+                }
+            }
+        } catch (err) {
+            console.error('Agent 02 polling error:', err.message);
+        }
+        await new Promise(res => setTimeout(res, 5 * 60 * 1000)); // Poll every 5 minutes
+    }
+}
+
+runAgent02();

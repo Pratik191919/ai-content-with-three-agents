@@ -17,6 +17,10 @@ const redisClient = isValidRedisUrl(REDIS_URL)
     ? redis.createClient({ url: REDIS_URL })
     : null;
 
+if (redisClient) {
+    redisClient.on('error', err => console.error('Agent 01 Redis Error:', err.message));
+}
+
 const groq = GROQ_API_KEY ? new Groq({ apiKey: GROQ_API_KEY }) : null;
 
 async function logActivity(agentName, eventType, message, metadata = {}) {

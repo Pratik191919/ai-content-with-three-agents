@@ -70,6 +70,7 @@ async function createRewriteBrief(postId, postData, metrics, score) {
         return;
     }
     const publishClient = redis.createClient({ url: REDIS_URL });
+    publishClient.on('error', err => console.error('Agent 03 Publish Error:', err.message));
     await publishClient.connect();
     await publishClient.publish('content_events', JSON.stringify(eventData));
     await publishClient.disconnect();
@@ -124,6 +125,7 @@ async function listenForEvents() {
     }
     try {
         redisClient = redis.createClient({ url: REDIS_URL });
+        redisClient.on('error', err => console.error('Agent 03 Listen Error:', err.message));
         await redisClient.connect();
 
         await redisClient.subscribe('content_events', (message) => {

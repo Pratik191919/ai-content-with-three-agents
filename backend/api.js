@@ -91,6 +91,7 @@ server.listen(PORT, '0.0.0.0', async () => {
     // Redis Subscriber for Realtime WebSocket Events
     try {
         const subscriber = redis.createClient({ url: REDIS_URL });
+        subscriber.on('error', err => console.error('API Redis Error:', err.message));
         await subscriber.connect();
         await subscriber.subscribe('content_events', (message) => {
             try {
