@@ -114,8 +114,12 @@ async function processTask() {
                 console.log(`Agent 01: Unique brief created with image preview!`);
                 await logActivity('Strategist (Agent 01)', 'SUCCESS', `Generated unique trend: ${trend.topic}`, { brief_id: briefId });
                 
-                if (redisClient) {
-                    await redisClient.publish('content_events', JSON.stringify({ event: 'content_briefs_ready', brief_id: briefId }));
+                if (redisClient && redisClient.isOpen) {
+                    try {
+                        await redisClient.publish('content_events', JSON.stringify({ event: 'content_briefs_ready', brief_id: briefId }));
+                    } catch (e) {
+                        console.error('Agent 01: Redis publish failed', e.message);
+                    }
                 }
             } else if (error) {
                 console.error('Supabase Insert Error:', error.message);
@@ -128,7 +132,14 @@ async function processTask() {
 
 async function runAgent01() {
     console.log('Starting Agent 01 - Content Strategist (Daemon Mode)');
-    if (redisClient) await redisClient.connect();
+    if (redisClient) {
+        try {
+            await redisClient.connect();
+            console.log('Agent 01: Connected to Redis');
+        } catch (e) {
+            console.error('Agent 01: Initial Redis connection failed (will rely on polling):', e.message);
+        }
+    }
     
     while (true) {
         await processTask();

@@ -11,7 +11,15 @@ const SUPABASE_KEY = process.env.SUPABASE_KEY;
 const REDIS_URL = process.env.REDIS_URL || '';
 const GROQ_API_KEY = process.env.GROQ_API_KEY;
 const WP_COM_SITE = process.env.WP_COM_SITE || 'myaiagentblog09.wordpress.com';
-const WP_COM_TOKEN = process.env.WP_COM_TOKEN ? decodeURIComponent(process.env.WP_COM_TOKEN) : null;
+let WP_COM_TOKEN = process.env.WP_COM_TOKEN ? process.env.WP_COM_TOKEN.trim() : null;
+if (WP_COM_TOKEN && WP_COM_TOKEN.includes('%')) {
+    try {
+        WP_COM_TOKEN = decodeURIComponent(WP_COM_TOKEN);
+    } catch (e) {
+        // If decoding fails, use the raw token
+    }
+}
+
 
 const supabase = (SUPABASE_URL && SUPABASE_KEY && SUPABASE_URL.startsWith('http'))
     ? createClient(SUPABASE_URL, SUPABASE_KEY)
@@ -311,6 +319,7 @@ async function listenForEvents() {
         const subClient = redis.createClient({ url: REDIS_URL });
         subClient.on('error', err => console.error('Agent 02 Redis Listener Error:', err.message));
         await subClient.connect();
+        console.log('Agent 02: Connected to Redis for listening events');
         await subClient.subscribe('content_events', (message) => {
             const data = JSON.parse(message);
             if (data.event === 'content_briefs_ready') processBrief(data.brief_id);
