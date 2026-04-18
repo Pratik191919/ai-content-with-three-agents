@@ -82,6 +82,7 @@ const { GoogleGenerativeAI } = require('@google/generative-ai');
  * Handles 1 Featured Image + inline Content Images via WordPress.com API
  */
 let dailyFreepikCount = 0; // Simple memory counter for free tier limit
+let countResetDate = new Date().toDateString();
 
 async function publishToCMS(postData, briefId) {
     if (!WP_COM_TOKEN || !WP_COM_SITE || !process.env.FREEPIK_API_KEY) {
@@ -94,6 +95,11 @@ async function publishToCMS(postData, briefId) {
         
         let prompts = [];
         
+        if (new Date().toDateString() !== countResetDate) {
+            dailyFreepikCount = 0;
+            countResetDate = new Date().toDateString();
+        }
+
         // Respect Freepik 100/day free limit (1 blog = 3 images)
         if (dailyFreepikCount > 90) {
             console.warn("Agent 02: ⚠️ Approaching Freepik daily limit! Skipping image generation for this post.");
@@ -247,12 +253,12 @@ Make them visual, modern, and blog-friendly. Return ONLY a valid JSON array of 3
         if (response.data && response.data.ID) {
             const liveUrl = response.data.URL;
             console.log(`Agent 02: 🚀 MEGA BLOG PUBLISHED: ${liveUrl}`);
-            return { url: liveUrl, media: uploadedMedia };
+            return { url: liveUrl, media: uploadedMedia, finalContent };
         }
     } catch (err) {
         console.error('Agent 02: WordPress publish failed:', err.response?.data || err.message);
     }
-    return { url: `${process.env.FRONTEND_URL || 'http://localhost:5173'}/preview/${briefId}`, media: [] };
+    return { url: `${process.env.FRONTEND_URL || 'http://localhost:5173'}/preview/${briefId}`, media: [], finalContent: postData.html_content || '' };
 }
 
 async function processBrief(briefId) {
@@ -277,7 +283,7 @@ async function processBrief(briefId) {
             wp_image_url: finalImageUrl
         }, briefId);
         
-        const { url: liveUrl, media: uploadedMedia } = liveResult;
+        const { url: liveUrl, media: uploadedMedia, finalContent: modifiedHtmlContent } = liveResult;
         
         await logActivity('Writer (Agent 02)', 'SUCCESS', `Published article: ${brief.title}`, { 
             url: liveUrl,
@@ -288,7 +294,7 @@ async function processBrief(briefId) {
             brief_id: briefId,
             title: brief.title,
             category: brief.category,
-            html_content: htmlContent,
+            html_content: modifiedHtmlContent || htmlContent,
             seo_score: seoScore,
             live_url: liveUrl,
             featured_image_url: uploadedMedia?.[0]?.url || finalImageUrl,
