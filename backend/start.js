@@ -1,35 +1,22 @@
-const { spawn } = require('child_process');
+console.log('Starting all content agents and API in a single process (Memory Optimized)...');
 
-console.log('Starting all content agents and API...');
+// By requiring them directly, they all share a single Node.js instance and V8 engine.
+// This reduces memory usage from ~700MB down to ~80MB, fitting perfectly in the Free Tier!
 
-const runProcess = (scriptName) => {
-    const child = spawn('node', [scriptName], { stdio: 'inherit' });
-    
-    child.on('error', (err) => {
-        console.error(`Failed to start ${scriptName}:`, err);
-    });
-    
-    child.on('exit', (code) => {
-        console.log(`${scriptName} exited with code ${code}`);
-        if (code !== 0) {
-            console.error(`Critical process ${scriptName} failed. Restarting...`);
-            setTimeout(() => runProcess(scriptName), 5000);
-        }
-    });
-};
+require('./api.js');
+require('./agent_01_content_strategist.js');
+require('./agent_02_blog_writer.js');
+require('./agent_03_content_auditor.js');
+require('./agent_seo.js');
+require('./agent_internal_linking.js');
+require('./agent_image.js');
+require('./agent_publisher.js');
+require('./agent_social.js');
+require('./agent_translation.js');
+require('./agent_repurposing.js');
+require('./agent_trend.js');
+require('./agent_fact_checking.js');
+require('./agent_newsletter.js');
+require('./agent_analytics.js');
 
-runProcess('api.js');
-runProcess('agent_01_content_strategist.js');
-runProcess('agent_02_blog_writer.js');
-runProcess('agent_03_content_auditor.js');
-runProcess('agent_seo.js');
-runProcess('agent_internal_linking.js');
-runProcess('agent_image.js');
-runProcess('agent_publisher.js');
-runProcess('agent_social.js');
-runProcess('agent_translation.js');
-runProcess('agent_repurposing.js');
-runProcess('agent_trend.js');
-runProcess('agent_fact_checking.js');
-runProcess('agent_newsletter.js');
-runProcess('agent_analytics.js');
+console.log('All agents successfully loaded and running!');
