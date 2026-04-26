@@ -48,7 +48,7 @@ async function processInternalLinking(briefId) {
 
         let linkedHtml = contentData.html_content;
 
-        if (groq && previousPosts && previousPosts.length > 0) {
+        if (previousPosts && previousPosts.length > 0) {
             const availableLinks = previousPosts.map(p => `- "${p.title}": ${p.live_url}`).join('\n');
             const prompt = `You are an SEO Internal Linking Expert.
             Take the following HTML blog post and strategically inject 1-3 internal links to our existing content.
@@ -64,13 +64,9 @@ async function processInternalLinking(briefId) {
             HTML:
             ${contentData.html_content}`;
 
-            const completion = await groq.chat.completions.create({
-                model: 'llama-3.3-70b-versatile',
-                messages: [{ role: 'user', content: prompt }],
-                temperature: 0.3
-            });
-
-            linkedHtml = completion.choices[0].message.content.replace(/```html/gi, '').replace(/```/gi, '').trim();
+            const { generateWithFallback } = require('./llm_helper');
+            const rawResponse = await generateWithFallback(prompt, 0.3);
+            linkedHtml = rawResponse.replace(/```html/gi, '').replace(/```/gi, '').trim();
         }
 
         // Update database with linked content

@@ -35,6 +35,19 @@ async function publishToWordPress(briefId) {
             return;
         }
 
+        // Atomic Optimistic Lock: Only publish if it hasn't been published yet
+        const { data: updated, error: updateError } = await supabase
+            .from('content')
+            .update({ status: 'PUBLISHING_IN_PROGRESS' })
+            .eq('brief_id', briefId)
+            .eq('status', 'DRAFT')
+            .select();
+
+        if (updateError || !updated || updated.length === 0) {
+            console.log(`Agent Publisher: Post for brief ${briefId} is already published or in progress by another worker.`);
+            return;
+        }
+
         const response = await axios.post(`https://public-api.wordpress.com/rest/v1.1/sites/${WP_COM_SITE}/posts/new`, {
             title: contentData.title,
             content: contentData.html_content,

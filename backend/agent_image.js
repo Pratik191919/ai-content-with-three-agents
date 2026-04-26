@@ -39,8 +39,24 @@ async function processImageGeneration(briefId) {
         const { data: contentData } = await supabase.from('content').select('*').eq('brief_id', briefId).single();
         if (!contentData) return;
 
-        // NOTE: In the fully refactored flow, the Freepik generation from agent_02 will be moved here.
-        // It will: 1. Prompt Gemini 2. Call Freepik 3. Upload to WP 4. Save Media IDs to Supabase
+        // Free Image Generation via Pollinations.ai
+        const { generateWithFallback } = require('./llm_helper');
+        
+        // 1. Generate an optimized image prompt using Gemini
+        const promptTemplate = `Create a highly descriptive, cinematic, and stunning image generation prompt based on this blog title: "${contentData.title}". Output ONLY the prompt text, no quotes or intro.`;
+        const imagePrompt = (await generateWithFallback(promptTemplate, 0.7)).trim();
+        
+        // 2. Encode for Pollinations API
+        const imageUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(imagePrompt)}?width=1200&height=630&nologo=true`;
+        
+        // 3. Inject the image perfectly into the top of the HTML content
+        const imgTag = `\n<img src="${imageUrl}" alt="${contentData.title}" style="width: 100%; height: auto; border-radius: 12px; margin-bottom: 24px; box-shadow: 0 4px 12px rgba(0,0,0,0.1);" />\n`;
+        const newHtml = imgTag + contentData.html_content;
+
+        // 4. Update the DB
+        await supabase.from('content').update({ 
+            html_content: newHtml 
+        }).eq('brief_id', briefId);
         
         await logActivity('Image Agent', 'SUCCESS', `Images processed and ready for publishing: ${contentData.title}`);
         await publishNextEvent(briefId);

@@ -43,25 +43,9 @@ async function optimizeForSEO(briefId) {
 
         // --- SEO Optimization Logic ---
         // We will pass the HTML to Groq/Gemini to inject keywords, fix H1/H2, add FAQ schema
-        if (groq) {
-            const prompt = `You are an expert SEO Optimizer. Take the following HTML blog post and optimize it for SEO. 
-            Target keyword: "${data.title}".
-            1. Ensure proper H2 and H3 hierarchy.
-            2. Naturally inject the target keyword a few times.
-            3. Append a JSON-LD FAQ schema at the bottom if applicable.
-            Output ONLY the optimized HTML code, nothing else.
-            
-            HTML:
-            ${data.html_content}`;
-
-            const completion = await groq.chat.completions.create({
-                model: 'llama-3.3-70b-versatile',
-                messages: [{ role: 'user', content: prompt }],
-                temperature: 0.3
-            });
-
-            optimizedHtml = completion.choices[0].message.content.replace(/```html/gi, '').replace(/```/gi, '').trim();
-        }
+        const { generateWithFallback } = require('./llm_helper');
+        const rawResponse = await generateWithFallback(prompt, 0.3);
+        optimizedHtml = rawResponse.replace(/```html/gi, '').replace(/```/gi, '').trim();
 
         // Update database with optimized content
         await supabase.from('content').update({ 

@@ -262,7 +262,18 @@ async function processBrief(briefId) {
         const brief = briefData[0];
         if (brief.status !== 'PENDING') return;
 
-        await supabase.from('content_briefs').update({ status: 'IN_PROGRESS' }).eq('id', briefId);
+        // Atomic Optimistic Lock: Only update if it is STILL 'PENDING'
+        const { data: updated, error: updateError } = await supabase
+            .from('content_briefs')
+            .update({ status: 'IN_PROGRESS' })
+            .eq('id', briefId)
+            .eq('status', 'PENDING')
+            .select();
+
+        if (updateError || !updated || updated.length === 0) {
+            console.log(`Agent 02: Brief ${briefId} was already grabbed by another process. Skipping duplicate run.`);
+            return;
+        }
         
         await logActivity('Writer (Agent 02)', 'INFO', `Generating draft for: ${brief.title}`);
         const { htmlContent, seoScore } = await generateBlogPost(brief);

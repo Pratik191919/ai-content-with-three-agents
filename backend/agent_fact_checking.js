@@ -33,29 +33,28 @@ async function verifyFacts(briefId) {
         let status = 'PASSED';
         let notes = 'All facts verified successfully.';
 
-        if (groq) {
-            const prompt = `You are an expert Fact Checker. Review the following blog post and identify any major factual errors, hallucinations, or false claims.
+        const prompt = `You are an expert Fact Checker. Review the following blog post and identify any major factual errors, hallucinations, or false claims.
             If there are errors, list them clearly. If it is generally factually correct, respond with "PASSED".
             
             Blog HTML Content:
             ${contentData.html_content}`;
             
-            const { generateWithFallback } = require('./llm_helper');
-        const result = await generateWithFallback(prompt, 0.1).trim();
-            if (result !== 'PASSED') {
-                status = 'FAILED';
-                notes = result;
-            }
-
-            if (supabase) {
-                await supabase.from('content').update({ 
-                    fact_check_status: status,
-                    fact_check_notes: notes
-                }).eq('id', contentData.id);
-            }
-            
-            await logActivity('Fact-Checking Agent', status === 'PASSED' ? 'SUCCESS' : 'WARNING', `Fact check completed: ${status}`);
+        const { generateWithFallback } = require('./llm_helper');
+        const rawResult = await generateWithFallback(prompt, 0.1);
+        const result = rawResult.trim();
+        if (result !== 'PASSED') {
+            status = 'FAILED';
+            notes = result;
         }
+
+        if (supabase) {
+            await supabase.from('content').update({ 
+                fact_check_status: status,
+                fact_check_notes: notes
+            }).eq('id', contentData.id);
+        }
+        
+        await logActivity('Fact-Checking Agent', status === 'PASSED' ? 'SUCCESS' : 'WARNING', `Fact check completed: ${status}`);
 
         // Even if it failed, we might want to flag it for human review but continue the pipeline
         await publishNextEvent(briefId);
