@@ -34,6 +34,14 @@ async function processImageGeneration(briefId) {
         return;
     }
 
+    console.log(`Agent Image: Processing brief ${briefId}...`);
+    try {
+        const { data: contentData } = await supabase.from('content').select('*').eq('brief_id', briefId).single();
+        if (!contentData) {
+            console.error(`Agent Image: No content found for brief ${briefId}`);
+            return;
+        }
+
         // --- FREEPIK IMAGE GENERATION ---
         const FREEPIK_API_KEY = process.env.FREEPIK_API_KEY;
         if (!FREEPIK_API_KEY) throw new Error('FREEPIK_API_KEY not found in environment');
