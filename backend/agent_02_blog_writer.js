@@ -271,50 +271,32 @@ async function processBrief(briefId) {
 
         await supabase.from('content_briefs').update({ status: 'IN_PROGRESS' }).eq('id', briefId);
         
-        await logActivity('Writer (Agent 02)', 'INFO', `Generating physical image & post: ${brief.title}`);
+        await logActivity('Writer (Agent 02)', 'INFO', `Generating draft for: ${brief.title}`);
         const { htmlContent, seoScore } = await generateBlogPost(brief);
         
-        const finalImageUrl = brief.featured_image_url || `https://picsum.photos/seed/${briefId}/1200/630`;
+        await logActivity('Writer (Agent 02)', 'SUCCESS', `Draft generated: ${brief.title}`);
 
-        const liveResult = await publishToCMS({
-            title: brief.title,
-            html_content: htmlContent,
-            category: brief.category,
-            wp_image_url: finalImageUrl
-        }, briefId);
-        
-        const { url: liveUrl, media: uploadedMedia, finalContent: modifiedHtmlContent } = liveResult;
-        
-        await logActivity('Writer (Agent 02)', 'SUCCESS', `Published article: ${brief.title}`, { 
-            url: liveUrl,
-            images: uploadedMedia
-        });
-
+        // Insert initial draft into content table (status DRAFT until Publisher Agent finishes)
         await supabase.from('content').insert({
             brief_id: briefId,
             title: brief.title,
             category: brief.category,
-            html_content: modifiedHtmlContent || htmlContent,
+            html_content: htmlContent,
             seo_score: seoScore,
-            live_url: liveUrl,
-            featured_image_url: uploadedMedia?.[0]?.url || finalImageUrl,
-            content_image: uploadedMedia?.[1]?.url || null,   // Specific requested field (guaranteed different from featured)
-            content_image_1: uploadedMedia?.[1]?.url || null, // Fallback/duplicate logic
-            content_image_2: uploadedMedia?.[2]?.url || null, // Third image
-            status: 'PUBLISHED'
+            status: 'DRAFT'
         });
-
-        await supabase.from('content_briefs').update({ status: 'PUBLISHED' }).eq('id', briefId);
 
         if (isValidRedisUrl(REDIS_URL)) {
             const publishClient = redis.createClient({ url: REDIS_URL });
             publishClient.on('error', err => console.error('Agent 02 Publish Error:', err.message));
             await publishClient.connect();
-            await publishClient.publish('content_events', JSON.stringify({ event: 'post_published', post_id: briefId, live_url: liveUrl }));
+            // Hand off to SEO Agent
+            await publishClient.publish('content_events', JSON.stringify({ event: 'writer_completed', brief_id: briefId }));
             await publishClient.disconnect();
         }
     } catch (err) {
         console.error(`Agent 02 Error:`, err);
+        await logActivity('Writer (Agent 02)', 'ERROR', `Failed generating blog: ${err.message}`);
     }
 }
 

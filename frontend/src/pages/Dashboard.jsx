@@ -169,7 +169,22 @@ const Dashboard = () => {
                                                 <div style={{ fontSize: '0.85rem', fontWeight: 700 }}>{b.title}</div>
                                                 <div style={{ fontSize: '0.7rem', color: 'var(--text-secondary)' }}>{b.category}</div>
                                             </td>
-                                            <td><span className={`badge ${b.status.toLowerCase()}`}>{b.status}</span></td>
+                                            <td>
+                                                <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                                                    <span className={`badge ${b.status.toLowerCase()}`}>{b.status}</span>
+                                                    {(b.status === 'PENDING' || b.status === 'DRAFT') && (
+                                                        <button 
+                                                            onClick={() => {
+                                                                axios.post(`${API_BASE}/approve/${b.id}`).then(() => fetchData());
+                                                            }}
+                                                            style={{ padding: '4px 8px', fontSize: '0.7rem', background: 'var(--accent-green)', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}
+                                                            title="Manually Approve and Send to Publisher"
+                                                        >
+                                                            Approve
+                                                        </button>
+                                                    )}
+                                                </div>
+                                            </td>
                                         </tr>
                                     ))}
                                     {recentBriefs.length === 0 && (
@@ -181,8 +196,67 @@ const Dashboard = () => {
                             </table>
                         </div>
                     </div>
+
+                    {/* FAILED JOBS SECTION */}
+                    <h2 style={{ marginTop: '2rem', marginBottom: '1.25rem', fontSize: '1.1rem', fontWeight: 700, color: 'var(--accent-red)' }}>⚠️ Failed Agent Jobs (DLQ)</h2>
+                    <div className="card" style={{ padding: 0 }}>
+                        <FailedJobsTable API_BASE={API_BASE} />
+                    </div>
                 </section>
             </div>
+        </div>
+    );
+};
+
+const FailedJobsTable = ({ API_BASE }) => {
+    const [failedJobs, setFailedJobs] = useState([]);
+    
+    useEffect(() => {
+        const loadFailed = async () => {
+            try {
+                const res = await axios.get(`${API_BASE}/failed_jobs`);
+                setFailedJobs(res.data || []);
+            } catch (e) {}
+        };
+        loadFailed();
+        const interval = setInterval(loadFailed, 10000);
+        return () => clearInterval(interval);
+    }, [API_BASE]);
+
+    if (failedJobs.length === 0) return <div style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-secondary)' }}>No failed jobs. System is healthy!</div>;
+
+    return (
+        <div className="table-container">
+            <table style={{ margin: 0 }}>
+                <thead>
+                    <tr>
+                        <th>Agent</th>
+                        <th>Error</th>
+                        <th>Action</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {failedJobs.map(job => (
+                        <tr key={job.id}>
+                            <td style={{ fontWeight: 600, fontSize: '0.85rem' }}>{job.agent_name}</td>
+                            <td style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', maxWidth: '200px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                {job.error_message}
+                            </td>
+                            <td>
+                                <button 
+                                    onClick={async () => {
+                                        await axios.post(`${API_BASE}/retry/${job.brief_id}`);
+                                        setFailedJobs(failedJobs.filter(j => j.id !== job.id));
+                                    }}
+                                    style={{ padding: '4px 8px', fontSize: '0.7rem', background: 'var(--accent-blue)', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}
+                                >
+                                    Retry
+                                </button>
+                            </td>
+                        </tr>
+                    ))}
+                </tbody>
+            </table>
         </div>
     );
 };

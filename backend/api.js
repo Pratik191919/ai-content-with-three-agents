@@ -79,6 +79,55 @@ app.get('/api/content/logs', async (req, res) => {
     res.json(data);
 });
 
+// Admin Endpoint: Get Failed Jobs
+app.get('/api/content/failed_jobs', async (req, res) => {
+    if (!requireSupabase(res)) return;
+    const { data, error } = await supabase
+        .from('agent_failed_jobs')
+        .select('*')
+        .order('created_at', { ascending: false })
+        .limit(10);
+    if (error) return res.status(500).json({ error: error.message });
+    res.json(data || []);
+});
+
+// Admin Endpoint: Retry Job
+app.post('/api/content/retry/:brief_id', async (req, res) => {
+    try {
+        const publishClient = redis.createClient({ url: REDIS_URL });
+        await publishClient.connect();
+        // Restart pipeline for this brief
+        await publishClient.publish('content_events', JSON.stringify({ event: 'content_briefs_ready', brief_id: req.params.brief_id }));
+        await publishClient.disconnect();
+        
+        if (supabase) {
+            await supabase.from('agent_failed_jobs').delete().eq('brief_id', req.params.brief_id);
+            await supabase.from('content_briefs').update({ status: 'PENDING' }).eq('id', req.params.brief_id);
+        }
+        res.json({ success: true, message: 'Job retried.' });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+// Admin Endpoint: Manual Approve
+app.post('/api/content/approve/:brief_id', async (req, res) => {
+    try {
+        const publishClient = redis.createClient({ url: REDIS_URL });
+        await publishClient.connect();
+        // Skip straight to Image/Publisher stage
+        await publishClient.publish('content_events', JSON.stringify({ event: 'internal_linking_completed', brief_id: req.params.brief_id }));
+        await publishClient.disconnect();
+        
+        if (supabase) {
+            await supabase.from('content_briefs').update({ status: 'APPROVED_MANUALLY' }).eq('id', req.params.brief_id);
+        }
+        res.json({ success: true, message: 'Job manually approved and sent to Publisher.' });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
 // ─── WebSocket & Startup ────────────────────────────────────
 
 io.on('connection', (socket) => {
