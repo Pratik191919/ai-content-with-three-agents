@@ -33,13 +33,8 @@ async function repurposeContent(briefId) {
             
             Output ONLY the Twitter thread. Separate each tweet with "---".`;
             
-            const completion = await groq.chat.completions.create({
-                model: 'llama-3.3-70b-versatile',
-                messages: [{ role: 'user', content: prompt }],
-                temperature: 0.7
-            });
-
-            const threadText = completion.choices[0].message.content.trim();
+            const { generateWithFallback } = require('./llm_helper');
+        const threadText = await generateWithFallback(prompt, 0.7).trim();
 
             await supabase.from('repurposed_content').insert([
                 { content_id: contentData.id, format_type: 'Twitter_Thread', content_text: threadText }

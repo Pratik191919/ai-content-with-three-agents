@@ -43,8 +43,6 @@ async function logActivity(agentName, eventType, message, metadata = {}) {
 
 async function generateBlogPost(brief) {
     console.log(`Agent 02: Generating blog post with Groq AI (Llama 3.3) for: ${brief.title}...`);
-    if (!groq) throw new Error('GROQ_API_KEY is missing.');
-
     let finalHtml;
     let attempts = 0;
     while (attempts < 5) {
@@ -56,13 +54,8 @@ Rules:
 - DO NOT INCLUDE ANY <img> TAGS. Image generation is handled automatically by the Freepik system.
 - Write original, insightful paragraphs with unique H2 and H3 headings for this specific topic`;
 
-            const completion = await groq.chat.completions.create({
-                model: 'llama-3.3-70b-versatile',
-                messages: [{ role: 'user', content: prompt }],
-                temperature: 0.9
-            });
-
-            const rawHtml = completion.choices[0].message.content;
+            const { generateWithFallback } = require('./llm_helper');
+            const rawHtml = await generateWithFallback(prompt, 0.9);
             finalHtml = rawHtml.replace(/```html/gi, '').replace(/```/gi, '').trim();
             
             if (finalHtml) break;

@@ -40,13 +40,8 @@ async function verifyFacts(briefId) {
             Blog HTML Content:
             ${contentData.html_content}`;
             
-            const completion = await groq.chat.completions.create({
-                model: 'llama-3.3-70b-versatile',
-                messages: [{ role: 'user', content: prompt }],
-                temperature: 0.1
-            });
-
-            const result = completion.choices[0].message.content.trim();
+            const { generateWithFallback } = require('./llm_helper');
+        const result = await generateWithFallback(prompt, 0.1).trim();
             if (result !== 'PASSED') {
                 status = 'FAILED';
                 notes = result;

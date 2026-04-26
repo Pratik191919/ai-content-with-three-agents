@@ -23,7 +23,7 @@ async function analyzePerformance() {
 
     console.log(`Agent Analytics: Analyzing blog performance...`);
     try {
-        if (!supabase || !groq) return;
+        if (!supabase) return;
 
         // Fetch top performing posts (mocking views/clicks logic)
         const { data: topPosts } = await supabase.from('content')
@@ -43,13 +43,10 @@ async function analyzePerformance() {
         
         Output ONLY the 3 suggested categories/topics as a comma-separated list.`;
 
-        const completion = await groq.chat.completions.create({
-            model: 'llama-3.3-70b-versatile',
-            messages: [{ role: 'user', content: prompt }],
-            temperature: 0.5
-        });
+        const { generateWithFallback } = require('./llm_helper');
+        const rawResult = await generateWithFallback(prompt, 0.5);
 
-        const suggestions = completion.choices[0].message.content.trim();
+        const suggestions = rawResult.trim();
         
         await logActivity('Analytics Agent', 'SUCCESS', `Analyzed data. Suggested focus areas: ${suggestions}`);
 

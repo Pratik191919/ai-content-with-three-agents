@@ -41,13 +41,8 @@ async function createSocialPosts(briefId, liveUrl) {
             TWITTER:
             [Twitter post text here]`;
 
-            const completion = await groq.chat.completions.create({
-                model: 'llama-3.3-70b-versatile',
-                messages: [{ role: 'user', content: prompt }],
-                temperature: 0.7
-            });
-
-            const text = completion.choices[0].message.content;
+            const { generateWithFallback } = require('./llm_helper');
+        const text = await generateWithFallback(prompt, 0.7);
             
             // Basic parsing (In a real scenario, you'd extract via Regex)
             const linkedinMatch = text.match(/LINKEDIN:\n([\s\S]*?)TWITTER:/);

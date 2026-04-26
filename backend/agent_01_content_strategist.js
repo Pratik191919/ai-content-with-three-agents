@@ -50,8 +50,6 @@ const BLOG_CATEGORIES = [
 
 async function scanTrends() {
     console.log(`Agent 01: Requesting unique trends and image prompts from Groq AI...`);
-    if (!groq) throw new Error('GROQ_API_KEY is missing.');
-
     let lastTitles = [];
     try {
         const { data } = await supabase.from('content_briefs').select('title, category').order('created_at', { ascending: false }).limit(10);
@@ -77,13 +75,8 @@ Format: {
   "image_prompt": "highly detailed descriptive prompt for AI image generation, cinematic, high resolution"
 }`;
 
-        const completion = await groq.chat.completions.create({
-            model: 'llama-3.3-70b-versatile',
-            messages: [{ role: 'user', content: prompt }],
-            temperature: 0.9
-        });
-
-        const text = completion.choices[0].message.content;
+        const { generateWithFallback } = require('./llm_helper');
+        const text = await generateWithFallback(prompt, 0.9);
         const cleaned = text.replace(/```json/gi, '').replace(/```/gi, '').trim();
         const parsed = JSON.parse(cleaned);
         return Array.isArray(parsed) ? parsed : [parsed];

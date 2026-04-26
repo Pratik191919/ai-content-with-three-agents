@@ -23,7 +23,7 @@ async function generateNewsletter() {
 
     console.log(`Agent Newsletter: Compiling weekly newsletter...`);
     try {
-        if (!supabase || !groq) return;
+        if (!supabase) return;
 
         // Fetch posts from the last 7 days
         const sevenDaysAgo = new Date();
@@ -48,13 +48,8 @@ async function generateNewsletter() {
         Recent Posts:
         ${blogList}`;
 
-        const completion = await groq.chat.completions.create({
-            model: 'llama-3.3-70b-versatile',
-            messages: [{ role: 'user', content: prompt }],
-            temperature: 0.7
-        });
-
-        const htmlBody = completion.choices[0].message.content.replace(/```html/gi, '').replace(/```/gi, '').trim();
+        const { generateWithFallback } = require('./llm_helper');
+        const htmlBody = await generateWithFallback(prompt, 0.7).replace(/```html/gi, '').replace(/```/gi, '').trim();
         
         // Extract a simple subject line (in a real scenario, could ask AI to structure it as JSON)
         const subjectLine = "Your Weekly AI & Tech Insights! 🚀";
