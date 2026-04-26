@@ -34,28 +34,79 @@ async function processImageGeneration(briefId) {
         return;
     }
 
-    console.log(`Agent Image: Generating images for brief ${briefId}...`);
-    try {
-        const { data: contentData } = await supabase.from('content').select('*').eq('brief_id', briefId).single();
-        if (!contentData) return;
+        // --- FREEPIK IMAGE GENERATION ---
+        const FREEPIK_API_KEY = process.env.FREEPIK_API_KEY;
+        if (!FREEPIK_API_KEY) throw new Error('FREEPIK_API_KEY not found in environment');
 
-        // Free Image Generation via Pollinations.ai
         const { generateWithFallback } = require('./llm_helper');
         
-        // 1. Generate an optimized image prompt using Gemini
-        const promptTemplate = `Create a highly descriptive, cinematic, and stunning image generation prompt based on this blog title: "${contentData.title}". Output ONLY the prompt text, no quotes or intro.`;
+        // 1. Generate Image Prompt
+        const promptTemplate = `Create a highly descriptive, cinematic, and stunning image generation prompt based on this blog title: "${contentData.title}". Output ONLY the prompt text.`;
         const imagePrompt = (await generateWithFallback(promptTemplate, 0.7)).trim();
         
-        // 2. Encode for Pollinations API
-        const imageUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(imagePrompt)}?width=1200&height=630&nologo=true`;
-        
-        // 3. Inject the image perfectly into the top of the HTML content
-        const imgTag = `\n<img src="${imageUrl}" alt="${contentData.title}" style="width: 100%; height: auto; border-radius: 12px; margin-bottom: 24px; box-shadow: 0 4px 12px rgba(0,0,0,0.1);" />\n`;
+        console.log(`Agent Image: Requesting Freepik AI for: ${imagePrompt}`);
+
+        // 2. Call Freepik API
+        const freepikRes = await axios.post('https://api.freepik.com/v1/ai/text-to-image', {
+            prompt: imagePrompt,
+            negative_prompt: 'text, watermark, low quality, blurry, distorted',
+            num_images: 1,
+            image: { size: 'landscape_4_3' }
+        }, {
+            headers: { 
+                'Content-Type': 'application/json',
+                'x-freepik-api-key': FREEPIK_API_KEY 
+            }
+        });
+
+        let imageBuffer;
+        const imgData = freepikRes.data?.data?.[0];
+        if (imgData?.base64) {
+            imageBuffer = Buffer.from(imgData.base64, 'base64');
+        } else if (imgData?.url) {
+            const imgRes = await axios.get(imgData.url, { responseType: 'arraybuffer' });
+            imageBuffer = Buffer.from(imgRes.data);
+        } else {
+            throw new Error('Freepik returned no image data');
+        }
+
+        // 3. Upload to WordPress Media Library (to ensure permanent visibility)
+        let wpMediaUrl = '';
+        let wpMediaId = null;
+        if (WP_COM_TOKEN && WP_COM_SITE) {
+            const form = new FormData();
+            form.append('media[]', imageBuffer, {
+                filename: `freepik-${Date.now()}.jpg`,
+                contentType: 'image/jpeg',
+            });
+
+            console.log(`Agent Image: Uploading to WordPress Media Library...`);
+            const uploadRes = await axios.post(`https://public-api.wordpress.com/rest/v1.1/sites/${WP_COM_SITE}/media/new`, form, {
+                headers: {
+                    ...form.getHeaders(),
+                    'Authorization': `Bearer ${WP_COM_TOKEN}`
+                }
+            });
+
+            const mediaItem = uploadRes.data.media?.[0];
+            if (mediaItem) {
+                wpMediaUrl = mediaItem.URL || mediaItem.url;
+                wpMediaId = mediaItem.ID;
+            }
+        }
+
+        // Failsafe: if WP upload failed, we can't really use the temp Freepik URL, but let's try
+        const finalImageUrl = wpMediaUrl || (imgData?.url || '');
+
+        // 4. Inject into HTML content
+        const imgStyle = 'style="width: 100%; height: auto; border-radius: 12px; margin-bottom: 24px; box-shadow: 0 4px 12px rgba(0,0,0,0.1);"';
+        const imgTag = `\n<img src="${finalImageUrl}" alt="${contentData.title}" ${imgStyle} />\n`;
         const newHtml = imgTag + contentData.html_content;
 
-        // 4. Update the DB
+        // 5. Update Database
         await supabase.from('content').update({ 
-            html_content: newHtml 
+            html_content: newHtml,
+            featured_media_id: wpMediaId // Save for Publisher Agent
         }).eq('brief_id', briefId);
         
         await logActivity('Image Agent', 'SUCCESS', `Images processed and ready for publishing: ${contentData.title}`);

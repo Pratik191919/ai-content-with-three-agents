@@ -52,6 +52,8 @@ async function publishToWordPress(briefId) {
             title: contentData.title,
             content: contentData.html_content,
             status: 'publish',
+            featured_media: contentData.featured_media_id,
+            featured_image: contentData.featured_media_id, // Dual-keying for failsafe API support
             categories: contentData.category || 'General', 
             tags: [contentData.category || 'Global', 'AI Hub', '2026']
         }, {
