@@ -60,3 +60,7 @@ CREATE TABLE IF NOT EXISTS public.newsletters (
     sent_at TIMESTAMP WITH TIME ZONE,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
+
+-- 8. Add WordPress Featured Media ID column
+ALTER TABLE public.content 
+ADD COLUMN IF NOT EXISTS featured_media_id BIGINT;

@@ -34,7 +34,7 @@ async function repurposeContent(briefId) {
             Output ONLY the Twitter thread. Separate each tweet with "---".`;
             
             const { generateWithFallback } = require('./llm_helper');
-        const threadText = await generateWithFallback(prompt, 0.7).trim();
+            const threadText = (await generateWithFallback(prompt, 0.7)).trim();
 
             await supabase.from('repurposed_content').insert([
                 { content_id: contentData.id, format_type: 'Twitter_Thread', content_text: threadText }
