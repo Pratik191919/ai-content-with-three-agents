@@ -82,7 +82,8 @@ Format: {
         return Array.isArray(parsed) ? parsed : [parsed];
     } catch (e) {
         console.error('Trend scan failed:', e.message);
-        return [{ topic: `Future of ${BLOG_CATEGORIES[0]} in 2026`, category: BLOG_CATEGORIES[0], trend_score: 80, image_prompt: 'futuristic technology landscape' }];
+        console.log('Skipping brief generation for this cycle to avoid duplicate fallbacks.');
+        return [];
     }
 }
 
