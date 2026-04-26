@@ -42,8 +42,16 @@ async function optimizeForSEO(briefId) {
         let optimizedHtml = data.html_content;
 
         // --- SEO Optimization Logic ---
-        // We will pass the HTML to Groq/Gemini to inject keywords, fix H1/H2, add FAQ schema
         const { generateWithFallback } = require('./llm_helper');
+        const prompt = `Optimize the following blog HTML for SEO. 
+        1. Inject keywords naturally.
+        2. Ensure proper H1, H2, H3 hierarchy.
+        3. Add a brief FAQ section with JSON-LD schema if possible.
+        Return ONLY the updated HTML.
+        
+        HTML Content:
+        ${data.html_content}`;
+
         const rawResponse = await generateWithFallback(prompt, 0.3);
         optimizedHtml = rawResponse.replace(/```html/gi, '').replace(/```/gi, '').trim();
 

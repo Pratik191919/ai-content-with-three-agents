@@ -107,22 +107,30 @@ async function processImageGeneration(briefId) {
         const finalImageUrl = wpMediaUrl || (imgData?.url || '');
 
         // 4. Inject into HTML content
+        console.log(`Agent Image: Success! Image uploaded to WP (ID: ${wpMediaId}, URL: ${wpMediaUrl})`);
+
+        // 4. Inject into HTML content
         const imgStyle = 'style="width: 100%; height: auto; border-radius: 12px; margin-bottom: 24px; box-shadow: 0 4px 12px rgba(0,0,0,0.1);"';
         const imgTag = `\n<img src="${finalImageUrl}" alt="${contentData.title}" ${imgStyle} />\n`;
         const newHtml = imgTag + contentData.html_content;
 
         // 5. Update Database
-        await supabase.from('content').update({ 
+        console.log(`Agent Image: Updating Supabase with new HTML content...`);
+        const { error: dbError } = await supabase.from('content').update({ 
             html_content: newHtml,
-            featured_media_id: wpMediaId // Save for Publisher Agent
+            featured_media_id: wpMediaId
         }).eq('brief_id', briefId);
+
+        if (dbError) throw new Error(`Supabase Update Failed: ${dbError.message}`);
         
         await logActivity('Image Agent', 'SUCCESS', `Images processed and ready for publishing: ${contentData.title}`);
         await publishNextEvent(briefId);
 
     } catch (err) {
-        console.error(`Agent Image Error:`, err);
-        await logActivity('Image Agent', 'ERROR', `Failed Image Gen for brief ${briefId}: ${err.message}`);
+        const errorDetail = err.response?.data ? JSON.stringify(err.response.data) : err.message;
+        console.error(`Agent Image Error:`, errorDetail);
+        await logActivity('Image Agent', 'ERROR', `Failed Image Gen for brief ${briefId}: ${errorDetail}`);
+        // Failsafe: still trigger publisher so the post isn't stuck forever
         await publishNextEvent(briefId);
     }
 }
