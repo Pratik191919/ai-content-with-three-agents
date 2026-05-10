@@ -227,17 +227,19 @@ Make them visual, modern, and blog-friendly. Return ONLY a valid JSON array of 3
             }
         }
 
-        // Step 6: Publish Post (Featured Image is the 1st generated image)
-        const featuredMediaId = uploadedMedia.length > 0 ? uploadedMedia[0].id : null;
-        
+        // Prepend featured image to content for guaranteed display
+        if (uploadedMedia.length > 0 && uploadedMedia[0].url) {
+            const featuredImgTag = `<img src="${uploadedMedia[0].url}" alt="${postData.title}" style="width:100%;height:auto;border-radius:12px;margin-bottom:24px;" />`;
+            finalContent = featuredImgTag + finalContent;
+        }
+
         console.log(`Agent 02: 📝 Creating final post on ${WP_COM_SITE}...`);
         const response = await axios.post(`https://public-api.wordpress.com/rest/v1.1/sites/${WP_COM_SITE}/posts/new`, {
             title: postData.title,
             content: finalContent,
             status: 'publish',
-            featured_media: featuredMediaId, 
-            featured_image: featuredMediaId, // Dual-keying for failsafe API support
-            categories: postData.category || 'General', 
+            featured_image: uploadedMedia.length > 0 && uploadedMedia[0].url ? uploadedMedia[0].url : null,
+            categories: postData.category || 'General',
             tags: [postData.category || 'Global', 'AI Hub', '2026']
         }, {
             headers: { 'Authorization': `Bearer ${WP_COM_TOKEN}` }
@@ -281,14 +283,41 @@ async function processBrief(briefId) {
         await logActivity('Writer (Agent 02)', 'SUCCESS', `Draft generated: ${brief.title}`);
 
         // Insert initial draft into content table (status DRAFT until Publisher Agent finishes)
-        await supabase.from('content').insert({
+        // Ensure html_content is never empty - use a fallback placeholder if needed
+        const safeHtmlContent = htmlContent || '<p>Content generation in progress. Please check back shortly.</p>';
+
+        const { data: insertedContent } = await supabase.from('content').insert({
             brief_id: briefId,
             title: brief.title,
             category: brief.category,
-            html_content: htmlContent,
+            html_content: safeHtmlContent,
             seo_score: seoScore,
             status: 'DRAFT'
-        });
+        }).select();
+
+        // Also publish directly to WordPress if we have credentials (Agent 02 handles its own publishing)
+        if (insertedContent && insertedContent.length > 0) {
+            const result = await publishToCMS({
+                title: brief.title,
+                category: brief.category,
+                html_content: safeHtmlContent
+            }, briefId);
+
+            // Update with live URL and content images if WordPress publish succeeded
+            if (result && result.url && !result.url.includes('localhost')) {
+                const updateData = {
+                    live_url: result.url,
+                    status: 'PUBLISHED'
+                };
+                // Store content images from the publish result
+                if (result.media && result.media.length > 0) {
+                    if (result.media[0]) updateData.featured_image_url = result.media[0].url;
+                    if (result.media[1]) updateData.content_image_1 = result.media[1].url;
+                    if (result.media[2]) updateData.content_image_2 = result.media[2].url;
+                }
+                await supabase.from('content').update(updateData).eq('brief_id', briefId);
+            }
+        }
 
         if (isValidRedisUrl(REDIS_URL)) {
             const publishClient = redis.createClient({ url: REDIS_URL });

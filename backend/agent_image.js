@@ -48,78 +48,135 @@ async function processImageGeneration(briefId) {
 
         const { generateWithFallback } = require('./llm_helper');
         
-        // 1. Generate Image Prompt
-        const promptTemplate = `Create a highly descriptive, cinematic, and stunning image generation prompt based on this blog title: "${contentData.title}". Output ONLY the prompt text.`;
-        const imagePrompt = (await generateWithFallback(promptTemplate, 0.7)).trim();
+        // 1. Generate 3 Image Prompts
+        const promptTemplate = `Generate exactly 3 short, descriptive, cinematic image generation prompts based on this blog title: "${contentData.title}".
+Return ONLY a valid JSON array of 3 strings. No markdown formatting or extra text.`;
         
-        console.log(`Agent Image: Requesting Freepik AI for: ${imagePrompt}`);
-
-        // 2. Call Freepik API
-        const freepikRes = await axios.post('https://api.freepik.com/v1/ai/text-to-image', {
-            prompt: imagePrompt,
-            negative_prompt: 'text, watermark, low quality, blurry, distorted',
-            num_images: 1,
-            image: { size: 'landscape_4_3' }
-        }, {
-            headers: { 
-                'Content-Type': 'application/json',
-                'x-freepik-api-key': FREEPIK_API_KEY 
+        let responseText = '';
+        try {
+            responseText = (await generateWithFallback(promptTemplate, 0.7)).trim();
+        } catch (llmErr) {
+            console.warn('Agent Image: LLM prompt generation failed (likely rate limit). Using default prompts.');
+        }
+        
+        let prompts = [];
+        try {
+            if (responseText) {
+                const jsonMatch = responseText.match(/\[.*\]/s);
+                if (jsonMatch) prompts = JSON.parse(jsonMatch[0]);
             }
-        });
-
-        let imageBuffer;
-        const imgData = freepikRes.data?.data?.[0];
-        if (imgData?.base64) {
-            imageBuffer = Buffer.from(imgData.base64, 'base64');
-        } else if (imgData?.url) {
-            const imgRes = await axios.get(imgData.url, { responseType: 'arraybuffer' });
-            imageBuffer = Buffer.from(imgRes.data);
-        } else {
-            throw new Error('Freepik returned no image data');
+        } catch (e) {
+            console.warn('Agent Image: Prompt parsing failed, using fallback.');
         }
 
-        // 3. Upload to WordPress Media Library (to ensure permanent visibility)
-        let wpMediaUrl = '';
-        let wpMediaId = null;
-        if (WP_COM_TOKEN && WP_COM_SITE) {
-            const form = new FormData();
-            form.append('media[]', imageBuffer, {
-                filename: `freepik-${Date.now()}.jpg`,
-                contentType: 'image/jpeg',
-            });
+        if (prompts.length < 3) {
+            prompts = [
+                `${contentData.title}, highly descriptive, cinematic, stunning`,
+                `${contentData.title}, professional modern concept, high quality`,
+                `${contentData.title}, futuristic dynamic visual, 8k resolution`
+            ];
+        }
 
-            console.log(`Agent Image: Uploading to WordPress Media Library...`);
-            const uploadRes = await axios.post(`https://public-api.wordpress.com/rest/v1.1/sites/${WP_COM_SITE}/media/new`, form, {
-                headers: {
-                    ...form.getHeaders(),
-                    'Authorization': `Bearer ${WP_COM_TOKEN}`
+        const uploadedMedia = [];
+
+        // 2 & 3. Call Freepik API and Upload to WP
+        for (let i = 0; i < prompts.length; i++) {
+            try {
+                console.log(`Agent Image: Requesting Freepik AI for: ${prompts[i]}`);
+                const freepikRes = await axios.post('https://api.freepik.com/v1/ai/text-to-image', {
+                    prompt: prompts[i],
+                    negative_prompt: 'text, watermark, low quality, blurry, distorted',
+                    num_images: 1,
+                    image: { size: 'landscape_4_3' }
+                }, {
+                    headers: { 
+                        'Content-Type': 'application/json',
+                        'x-freepik-api-key': FREEPIK_API_KEY 
+                    }
+                });
+
+                let imageBuffer;
+                const imgData = freepikRes.data?.data?.[0];
+                if (imgData?.base64) {
+                    imageBuffer = Buffer.from(imgData.base64, 'base64');
+                } else if (imgData?.url) {
+                    const imgRes = await axios.get(imgData.url, { responseType: 'arraybuffer' });
+                    imageBuffer = Buffer.from(imgRes.data);
+                } else {
+                    throw new Error('Freepik returned no image data');
                 }
-            });
 
-            const mediaItem = uploadRes.data.media?.[0];
-            if (mediaItem) {
-                wpMediaUrl = mediaItem.URL || mediaItem.url;
-                wpMediaId = mediaItem.ID;
+                let wpMediaUrl = imgData?.url || '';
+                let wpMediaId = null;
+                
+                if (WP_COM_TOKEN && WP_COM_SITE) {
+                    const form = new FormData();
+                    form.append('media[]', imageBuffer, {
+                        filename: `freepik-${i}-${Date.now()}.jpg`,
+                        contentType: 'image/jpeg',
+                    });
+
+                    console.log(`Agent Image: Uploading Image ${i+1}/3 to WordPress Media Library...`);
+                    const uploadRes = await axios.post(`https://public-api.wordpress.com/rest/v1.1/sites/${WP_COM_SITE}/media/new`, form, {
+                        headers: {
+                            ...form.getHeaders(),
+                            'Authorization': `Bearer ${WP_COM_TOKEN}`
+                        }
+                    });
+
+                    const mediaItem = uploadRes.data.media?.[0];
+                    if (mediaItem) {
+                        wpMediaUrl = mediaItem.URL || mediaItem.url;
+                        wpMediaId = mediaItem.ID;
+                        console.log(`Agent Image: Success! Image uploaded to WP (ID: ${wpMediaId}, URL: ${wpMediaUrl})`);
+                    }
+                }
+                
+                uploadedMedia.push({ id: wpMediaId, url: wpMediaUrl });
+                
+                // Rate limit to avoid 429
+                if (i < prompts.length - 1) await new Promise(r => setTimeout(r, 4000));
+            } catch (err) {
+                console.error(`Agent Image Error on image ${i+1}:`, err.message);
             }
         }
 
-        // Failsafe: if WP upload failed, we can't really use the temp Freepik URL, but let's try
-        const finalImageUrl = wpMediaUrl || (imgData?.url || '');
-
-        // 4. Inject into HTML content
-        console.log(`Agent Image: Success! Image uploaded to WP (ID: ${wpMediaId}, URL: ${wpMediaUrl})`);
-
-        // 4. Inject into HTML content
-        const imgStyle = 'style="width: 100%; height: auto; border-radius: 12px; margin-bottom: 24px; box-shadow: 0 4px 12px rgba(0,0,0,0.1);"';
-        const imgTag = `\n<img src="${finalImageUrl}" alt="${contentData.title}" ${imgStyle} />\n`;
-        const newHtml = imgTag + contentData.html_content;
+        // 4. Inject into HTML content (only images 1 and 2)
+        let finalHtml = contentData.html_content || '';
+        if (uploadedMedia.length > 1) {
+            const paragraphs = finalHtml.split('</p>');
+            const partSize = Math.floor(paragraphs.length / uploadedMedia.length);
+            
+            if (partSize > 1) {
+                const imgStyle = 'style="width: 100%; height: auto; border-radius: 12px; margin: 32px 0; box-shadow: 0 4px 12px rgba(0,0,0,0.1);"';
+                let inserted = 0;
+                for (let j = 1; j < uploadedMedia.length; j++) {
+                    const targetIndex = (partSize * j) + inserted;
+                    if (targetIndex < paragraphs.length) {
+                        paragraphs.splice(targetIndex, 0, `\n<img src="${uploadedMedia[j].url}" alt="${contentData.title} visual" ${imgStyle} />\n`);
+                        inserted++;
+                    }
+                }
+                finalHtml = paragraphs.join('</p>');
+            }
+        }
 
         // 5. Update Database
-        console.log(`Agent Image: Updating Supabase with new HTML content...`);
-        const { error: dbError } = await supabase.from('content').update({ 
-            html_content: newHtml,
-            featured_media_id: wpMediaId
-        }).eq('brief_id', briefId);
+        console.log(`Agent Image: Updating Supabase with new HTML content and image URLs...`);
+        const updatePayload = { html_content: finalHtml };
+        
+        if (uploadedMedia.length > 0 && uploadedMedia[0].url) {
+            updatePayload.featured_media_id = uploadedMedia[0].id;
+            updatePayload.featured_image_url = uploadedMedia[0].url;
+        }
+        if (uploadedMedia.length > 1 && uploadedMedia[1].url) {
+            updatePayload.content_image_1 = uploadedMedia[1].url;
+        }
+        if (uploadedMedia.length > 2 && uploadedMedia[2].url) {
+            updatePayload.content_image_2 = uploadedMedia[2].url;
+        }
+
+        const { error: dbError } = await supabase.from('content').update(updatePayload).eq('brief_id', briefId);
 
         if (dbError) throw new Error(`Supabase Update Failed: ${dbError.message}`);
         

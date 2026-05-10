@@ -48,13 +48,19 @@ async function publishToWordPress(briefId) {
             return;
         }
 
+        // Build content with featured image at the top
+        let finalContent = contentData.html_content || '';
+        if (contentData.featured_image_url) {
+            const featuredImgTag = `<img src="${contentData.featured_image_url}" alt="${contentData.title}" style="width:100%;height:auto;border-radius:12px;margin-bottom:24px;" />`;
+            finalContent = featuredImgTag + finalContent;
+        }
+
         const response = await axios.post(`https://public-api.wordpress.com/rest/v1.1/sites/${WP_COM_SITE}/posts/new`, {
             title: contentData.title,
-            content: contentData.html_content,
+            content: finalContent,
             status: 'publish',
-            featured_media: contentData.featured_media_id,
-            featured_image: contentData.featured_media_id, // Dual-keying for failsafe API support
-            categories: contentData.category || 'General', 
+            featured_image: contentData.featured_image_url, // Pass URL directly if no WP media ID
+            categories: contentData.category || 'General',
             tags: [contentData.category || 'Global', 'AI Hub', '2026']
         }, {
             headers: { 'Authorization': `Bearer ${WP_COM_TOKEN}` }
